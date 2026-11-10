@@ -1,0 +1,132 @@
+{
+  "float": {
+    "all": {
+      "n": 4767,
+      "accuracy": 0.9874134675896791,
+      "precision": 0.9937828790052606,
+      "recall": 0.9778823529411764,
+      "f1": 0.9857685009487666,
+      "specificity": 0.9950794852384557,
+      "confusion": {
+        "tn": 2629,
+        "fp": 13,
+        "fn": 47,
+        "tp": 2078
+      }
+    },
+    "sisf": {
+      "n": 4267,
+      "accuracy": 0.9871103820014061,
+      "precision": 0.9945652173913043,
+      "recall": 0.976,
+      "f1": 0.9851951547779273,
+      "specificity": 0.995819397993311,
+      "confusion": {
+        "tn": 2382,
+        "fp": 10,
+        "fn": 45,
+        "tp": 1830
+      }
+    },
+    "syn": {
+      "n": 500,
+      "accuracy": 0.99,
+      "precision": 0.9880478087649402,
+      "recall": 0.992,
+      "f1": 0.9900199600798403,
+      "specificity": 0.988,
+      "confusion": {
+        "tn": 247,
+        "fp": 3,
+        "fn": 2,
+        "tp": 248
+      }
+    }
+  },
+  "int8": {
+    "all": {
+      "n": 4767,
+      "accuracy": 0.9882525697503671,
+      "precision": 0.9947393591582975,
+      "recall": 0.9788235294117648,
+      "f1": 0.9867172675521821,
+      "specificity": 0.9958364875094625,
+      "confusion": {
+        "tn": 2631,
+        "fp": 11,
+        "fn": 45,
+        "tp": 2080
+      }
+    },
+    "sisf": {
+      "n": 4267,
+      "accuracy": 0.9878134520740567,
+      "precision": 0.9951113525258012,
+      "recall": 0.9770666666666666,
+      "f1": 0.9860064585575888,
+      "specificity": 0.9962374581939799,
+      "confusion": {
+        "tn": 2383,
+        "fp": 9,
+        "fn": 43,
+        "tp": 1832
+      }
+    },
+    "syn": {
+      "n": 500,
+      "accuracy": 0.992,
+      "precision": 0.992,
+      "recall": 0.992,
+      "f1": 0.992,
+      "specificity": 0.992,
+      "confusion": {
+        "tn": 248,
+        "fp": 2,
+        "fn": 2,
+        "tp": 248
+      }
+    }
+  },
+  "threshold": 0.5,
+  "tflite_bytes": 14088,
+  "params": 5825,
+  "quant": {
+    "in_scale": 0.07719822227954865,
+    "in_zero": -4,
+    "out_scale": 0.00390625,
+    "out_zero": -128
+  },
+  "ops": [
+    "CONV_2D",
+    "FULLY_CONNECTED",
+    "LOGISTIC",
+    "MAX_POOL_2D",
+    "MEAN",
+    "RESHAPE"
+  ],
+  "float_int8_agreement": 0.9987413467589679,
+  "test_subjects": [
+    "SA11",
+    "SA13",
+    "SA14",
+    "SA16",
+    "SA23",
+    "SE07",
+    "SE08",
+    "SE11",
+    "SE12",
+    "SE14",
+    "SYN02",
+    "SYN05"
+  ],
+  "dataset_sources": {
+    "sisf": 18469,
+    "syn": 5000
+  },
+  "window": {
+    "fs": 50,
+    "samples": 128,
+    "impact_index": 64,
+    "gyro_scale": 500.0
+  }
+}

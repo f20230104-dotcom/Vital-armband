@@ -1,0 +1,7 @@
+# Dashboard (also what a Hugging Face Space installs)
+gradio>=5.20
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.5
+pandas>=2.0
+requests>=2.31

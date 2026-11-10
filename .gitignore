@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+# PlatformIO
+.pio/
+.vscode/
+# secrets & local data
+include/secrets.h
+dashboard/*.db
+dashboard/*.db-*
+ml_training/data/
+# OS
+.DS_Store
