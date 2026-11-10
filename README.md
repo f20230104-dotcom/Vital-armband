@@ -17,8 +17,9 @@ ESP32 smart-health wristband: **TinyML fall detection**, **heart rate / SpO₂ /
 **medication reminders**, and a **live caregiver dashboard**. The whole stack runs today without any hardware:
 the firmware has a full `SIMULATION_MODE`, and the dashboard ships with a virtual wristband.
 
-**Live demo:** https://claude.ai/artifact/BFwt3ebfJPpfAAfy6G1xHP. It runs the simulation scenario, fall state machine,
-alert log and a clickable wristband in the browser. The full Gradio dashboard runs locally with `python dashboard/app.py --simulate`.
+**Live demo:** https://huggingface.co/spaces/kkshik/vital-wristband. It runs the simulation scenario, fall state machine,
+alert log and a clickable wristband in the browser. The full Gradio dashboard (with the ESP32 webhook) runs locally with
+`python dashboard/app.py --simulate`.
 
 ```
  MPU6050 ─┐                    ┌─ motion_task  (50 Hz, fall FSM + TFLite Micro CNN) ─┐
