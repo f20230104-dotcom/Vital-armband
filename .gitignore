@@ -12,3 +12,5 @@ dashboard/*.db-*
 ml_training/data/
 # OS
 .DS_Store
+hf_space/
+hf_static/
