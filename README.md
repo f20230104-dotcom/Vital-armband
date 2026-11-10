@@ -4,7 +4,10 @@ emoji: 🩺
 colorFrom: red
 colorTo: gray
 sdk: gradio
+sdk_version: 6.31.0
+python_version: "3.11"
 app_file: dashboard/app.py
+short_description: Fall detection & vitals dashboard for an ESP32 wristband
 pinned: false
 ---
 
