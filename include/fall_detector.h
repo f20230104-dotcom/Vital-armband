@@ -3,6 +3,7 @@
 //
 //   IDLE --(|a| < 0.5 g for >= 60 ms)--> FREE_FALL
 //   FREE_FALL --(|a| > 2.7 g within 1 s)--> IMPACT          (else back to IDLE)
+//   IDLE --(|a| > 2.0 g, no free fall)--> IMPACT             (second path: slips, grabs, faints)
 //   IMPACT --(500 ms settle)--> POST_IMPACT
 //   POST_IMPACT --(low motion for 2.5 s)--> INFERENCE        (movement -> IDLE: wearer recovered)
 //   INFERENCE --(p(fall) >= threshold)--> COUNTDOWN          (else IDLE: model rejected)

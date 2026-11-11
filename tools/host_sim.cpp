@@ -24,6 +24,17 @@ namespace {
 std::vector<std::vector<float>> g_windows;
 int g_events[16] = {0};
 
+// vital-sign accuracy vs the scenario's ground truth (seconds with a valid, ungated estimate)
+struct ErrStat {
+    double abs = 0, sq = 0; int n = 0, total = 0;
+    void add(bool valid, float est, float truth) { ++total; if (!valid) return; abs += std::fabs(est - truth); sq += (est - truth) * (est - truth); ++n; }
+    void print(const char* name, const char* unit) const {
+        std::printf("  %-5s MAE %.2f %s  RMSE %.2f %s  valid %.1f %% of seconds\n", name, n ? abs / n : 0.0, unit,
+                    n ? std::sqrt(sq / n) : 0.0, unit, total ? 100.0 * n / total : 0.0);
+    }
+};
+ErrStat g_hr, g_spo2, g_rr;
+
 float recordingClassifier(const float* w, void*) {
     g_windows.emplace_back(w, w + FALL_WINDOW_SAMPLES * 6);
     return FallDetector::heuristicScore(w);
@@ -82,6 +93,12 @@ int main(int argc, char** argv) {
         }
         if (t % 1000 == 0 && t > 0) {
             const VitalsEstimate e = proc.estimate();
+            {
+                const sim::Physiology truth = sim::Scenario::physiology(sim::Scenario::cycleTime(t));
+                g_hr.add(e.hrValid && !e.gated, e.hr, truth.hr);
+                g_spo2.add(e.spo2Valid && !e.gated, e.spo2, truth.spo2);
+                g_rr.add(e.rrValid && !e.gated, e.rr, truth.rr);
+            }
             auto upd = [](int& c, bool valid, bool abn) { if (valid) c = abn ? c + 1 : 0; };
             upd(abnSpo2, e.spo2Valid, e.spo2 < SPO2_LOW_PCT);
             upd(abnHr, e.hrValid, e.hr < HR_LOW_BPM || e.hr > HR_HIGH_BPM);
@@ -129,6 +146,10 @@ int main(int argc, char** argv) {
     for (int e = 1; e <= (int)EventType::BOOT; ++e)
         if (g_events[e]) std::printf("  %s=%d", eventName((EventType)e), g_events[e]);
     std::printf("\nClassifier invocations: %zu\n", g_windows.size());
+    std::printf("Vital-sign accuracy vs ground truth:\n");
+    g_hr.print("HR", "bpm");
+    g_spo2.print("SpO2", "%");
+    g_rr.print("RR", "br/min");
 
     if (dump) {
         FILE* f = std::fopen(dump, "w");

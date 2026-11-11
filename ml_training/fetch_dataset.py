@@ -151,7 +151,7 @@ def _peak_window(sig: np.ndarray, peak: int, offset: int) -> np.ndarray | None:
 
 
 def load_sisfall(zip_path: Path, rng: np.random.Generator, max_subjects: int | None = None):
-    X, y, groups = [], [], []
+    X, y, groups, acts = [], [], [], []
     with zipfile.ZipFile(zip_path) as zf:
         names = [n for n in zf.namelist() if SISFALL_FILE_RE.search(n)]
         if not names:
@@ -168,34 +168,105 @@ def load_sisfall(zip_path: Path, rng: np.random.Generator, max_subjects: int | N
             if len(sig) < SISFALL_FS * 3:
                 continue
             sig = _to_model_units(_decimate(sig, SISFALL_FS // FS_HZ))
-            mag = np.linalg.norm(sig[:, :3], axis=1)
-            is_fall = m["act"].startswith("F")
-            if is_fall:
-                peak = int(np.argmax(mag))
-                for off in (-10, -5, 0, 5, 10):           # temporal jitter augmentation
-                    w = _peak_window(sig, peak, off)
-                    if w is not None:
-                        X.append(w); y.append(1); groups.append(m["subj"])
-            else:
-                # Hard negatives: windows centred on the strongest ADL peaks (these are the
-                # windows the firmware's threshold trigger would actually hand to the model).
-                order = np.argsort(mag)[::-1]
-                used: list[int] = []
-                for p in order:
-                    if len(used) >= 3:
-                        break
-                    if all(abs(p - u) > WIN for u in used):
-                        used.append(int(p))
-                        w = _peak_window(sig, int(p), int(rng.integers(-10, 11)))
-                        if w is not None:
-                            X.append(w); y.append(0); groups.append(m["subj"])
-                # plus one random window for general coverage
-                if len(sig) > WIN:
-                    s = int(rng.integers(0, len(sig) - WIN))
-                    X.append(sig[s:s + WIN]); y.append(0); groups.append(m["subj"])
+            for w, label in windows_from_trial(sig, m["act"].startswith("F"), rng):
+                X.append(w); y.append(label); groups.append(m["subj"]); acts.append(m["act"])
             if (i + 1) % 500 == 0:
                 print(f"[sisfall]   parsed {i + 1}/{len(names)} files", flush=True)
-    return np.stack(X).astype(np.float32), np.asarray(y, np.int8), np.asarray(groups)
+    return np.stack(X).astype(np.float32), np.asarray(y, np.int8), np.asarray(groups), np.asarray(acts)
+
+
+def windows_from_trial(sig: np.ndarray, is_fall: bool, rng: np.random.Generator):
+    """Cut one trial (50 Hz, model units) into labelled windows.
+
+    Falls: 5 windows around the impact peak (temporal jitter -10..+10 samples), mirroring
+    the firmware, which snapshots the window when the impact sits at IMPACT_INDEX.
+    ADLs: hard negatives centred on the 3 strongest, non-overlapping |a| peaks (exactly the
+    windows the firmware's threshold trigger would hand to the model) + 1 random window.
+    """
+    out = []
+    mag = np.linalg.norm(sig[:, :3], axis=1)
+    if is_fall:
+        peak = int(np.argmax(mag))
+        for off in (-10, -5, 0, 5, 10):
+            w = _peak_window(sig, peak, off)
+            if w is not None:
+                out.append((w, 1))
+        return out
+    order = np.argsort(mag)[::-1]
+    used: list[int] = []
+    for p in order:
+        if len(used) >= 3:
+            break
+        if all(abs(p - u) > WIN for u in used):
+            used.append(int(p))
+            w = _peak_window(sig, int(p), int(rng.integers(-10, 11)))
+            if w is not None:
+                out.append((w, 0))
+    if len(sig) > WIN:
+        s = int(rng.integers(0, len(sig) - WIN))
+        out.append((sig[s:s + WIN], 0))
+    return out
+
+
+UCI_WRIST_SENSOR = "340537"          # Xsens MTw on the right wrist (dataset Information.pdf)
+UCI_FS = 25
+UCI_TRIAL_RE = re.compile(r"(?P<subj>[12]\d\d)/Testler Export/(?P<code>[89]\d\d)-[^/]*/Test_\d+/" + UCI_WRIST_SENSOR + r"\.txt$")
+UCI_OUT_FILE = DATA_DIR / "uci_wrist.npz"
+
+
+def load_uci_wrist(root: Path, rng: np.random.Generator):
+    """UCI 'Simulated Falls and Daily Living Activities' (Ozdemir & Barshan, Sensors 2014),
+    RIGHT-WRIST sensor only: 17 volunteers, 20 fall + 16 ADL types, Xsens MTw @ 25 Hz.
+    Used as an EXTERNAL, real-wrist test set (and for the wrist fine-tuning experiment).
+    Signals are resampled 25 -> 50 Hz and converted m/s^2 -> g, rad/s -> dps."""
+    import pandas as pd
+    X, y, groups, acts = [], [], [], []
+    files = sorted(p for p in root.rglob(f"{UCI_WRIST_SENSOR}.txt"))
+    for k, f in enumerate(files):
+        m = UCI_TRIAL_RE.search(f.as_posix())
+        if not m:
+            continue
+        try:
+            df = pd.read_csv(f, sep="\t", skiprows=4, usecols=["Acc_X", "Acc_Y", "Acc_Z", "Gyr_X", "Gyr_Y", "Gyr_Z"])
+        except Exception:
+            continue
+        raw = df.interpolate(limit_direction="both").to_numpy(np.float64)
+        if len(raw) < 3 * UCI_FS or np.isnan(raw).any():
+            continue
+        t_in = np.arange(len(raw)) / UCI_FS
+        t_out = np.arange(0, t_in[-1], 1 / FS_HZ)
+        sig = np.stack([np.interp(t_out, t_in, raw[:, c]) for c in range(6)], axis=1)
+        sig[:, :3] /= 9.80665
+        sig[:, 3:] = np.rad2deg(sig[:, 3:])
+        for w, label in windows_from_trial(_to_model_units(sig), m["code"].startswith("9"), rng):
+            X.append(w); y.append(label); groups.append("U-" + m["subj"]); acts.append("UCI-" + m["code"])
+        if (k + 1) % 500 == 0:
+            print(f"[uci]   parsed {k + 1}/{len(files)} trials", flush=True)
+    print(f"[uci] {len(files)} wrist trials -> {len(y)} windows (falls={int(np.sum(y))})")
+    return np.stack(X).astype(np.float32), np.asarray(y, np.int8), np.asarray(groups), np.asarray(acts)
+
+
+WRIST_FILE_RE = re.compile(r"(?P<act>[DF]\d{2})_(?P<subj>[A-Za-z0-9]+)_R(?P<rep>\d{2})\.csv$")
+
+
+def load_wrist_recordings(folder: Path, rng: np.random.Generator):
+    """Real wrist trials recorded with record_wrist_data.py (already 50 Hz, g and dps)."""
+    X, y, groups, acts = [], [], [], []
+    files = sorted(folder.rglob("*.csv"))
+    for f in files:
+        m = WRIST_FILE_RE.search(f.name)
+        if not m:
+            continue
+        raw = np.loadtxt(f, delimiter=",", skiprows=1, ndmin=2)
+        if len(raw) < WIN + 10:
+            continue
+        sig = _to_model_units(raw[:, 1:7])
+        for w, label in windows_from_trial(sig, m["act"].startswith("F"), rng):
+            X.append(w); y.append(label); groups.append("W-" + m["subj"]); acts.append(m["act"])
+    print(f"[wrist] {len(files)} recordings -> {len(y)} windows")
+    if not X:
+        return None
+    return np.stack(X).astype(np.float32), np.asarray(y, np.int8), np.asarray(groups), np.asarray(acts)
 
 
 # =========================================================================== synthetic wrist data
@@ -300,7 +371,7 @@ def synth_window(rng: np.random.Generator, label: int) -> np.ndarray:
                 acc[c:c + 4] += _impact(rng, 0, 4, rng.uniform(1.0, 2.2), _rand_unit(rng))
                 gyr[c - ff:c + 4] += rng.normal(0, 120, (ff + 4, 3))
         x = np.hstack([acc, gyr / GYRO_SCALE])
-        return x.astype(np.float32)
+        return x.astype(np.float32), f"SYN-ADL-{kind}"
 
     # ---------------- FALL
     style = rng.choice(["forward", "backward", "lateral", "syncope", "from_chair"], p=[0.3, 0.2, 0.2, 0.15, 0.15])
@@ -327,15 +398,16 @@ def synth_window(rng: np.random.Generator, label: int) -> np.ndarray:
         post_gyr += rng.normal(0, 15, post_gyr.shape)
     acc[c + n_imp:], gyr[c + n_imp:] = post_acc, post_gyr
     x = np.hstack([acc, gyr / GYRO_SCALE])
-    return x.astype(np.float32)
+    return x.astype(np.float32), f"SYN-FALL-{style}"
 
 
 def make_synthetic(n_per_class: int, rng: np.random.Generator, n_subjects: int = 20):
-    X, y, groups = [], [], []
+    X, y, groups, acts = [], [], [], []
     for label in (0, 1):
         for i in range(n_per_class):
-            X.append(synth_window(rng, label)); y.append(label); groups.append(f"SYN{i % n_subjects:02d}")
-    return np.stack(X), np.asarray(y, np.int8), np.asarray(groups)
+            w, kind = synth_window(rng, label)
+            X.append(w); y.append(label); groups.append(f"SYN{i % n_subjects:02d}"); acts.append(kind)
+    return np.stack(X), np.asarray(y, np.int8), np.asarray(groups), np.asarray(acts)
 
 
 # =========================================================================== main
@@ -346,7 +418,20 @@ def main() -> int:
     ap.add_argument("--synthetic-per-class", type=int, default=2500)
     ap.add_argument("--max-subjects", type=int, default=None)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--wrist-dir", type=Path, default=DATA_DIR / "wrist",
+                    help="real wrist recordings from record_wrist_data.py (used when present)")
+    ap.add_argument("--uci-only", action="store_true",
+                    help="only (re)build data/uci_wrist.npz, the external real-wrist test set")
     args = ap.parse_args()
+    uci_root = RAW_DIR / "uci_falls" / "wrist"
+    if args.uci_only:
+        if not uci_root.exists():
+            print(f"[uci] {uci_root} missing: download UCI dataset 455 and extract the {UCI_WRIST_SENSOR}.txt files")
+            return 1
+        Xu, yu, gu, au = load_uci_wrist(uci_root, np.random.default_rng(args.seed))
+        np.savez_compressed(UCI_OUT_FILE, X=Xu, y=yu, groups=gu.astype("<U8"), activity=au.astype("<U12"))
+        print(f"[done] {UCI_OUT_FILE}  X={Xu.shape}")
+        return 0
     rng = np.random.default_rng(args.seed)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -355,8 +440,8 @@ def main() -> int:
         zp = fetch_sisfall()
         if zp is not None:
             try:
-                Xs, ys, gs = load_sisfall(zp, rng, args.max_subjects)
-                parts.append((Xs, ys, gs, "sisf"))
+                Xs, ys, gs, acs = load_sisfall(zp, rng, args.max_subjects)
+                parts.append((Xs, ys, gs, "sisf", acs))
                 print(f"[sisfall] {len(ys)} windows  (falls={int(ys.sum())}, adl={int((ys == 0).sum())})")
             except Exception as exc:
                 print(f"[sisfall] parse failed: {exc}")
@@ -367,15 +452,21 @@ def main() -> int:
             print("[fallback] SisFall unavailable -> generating synthetic wrist dataset only")
 
     if args.source == "synthetic" or not parts or not args.no_augment:
-        Xn, yn, gn = make_synthetic(args.synthetic_per_class, rng)
-        parts.append((Xn, yn, gn, "syn"))
+        Xn, yn, gn, an = make_synthetic(args.synthetic_per_class, rng)
+        parts.append((Xn, yn, gn, "syn", an))
         print(f"[synthetic] {len(yn)} windows (falls={int(yn.sum())})")
+
+    if args.wrist_dir and args.wrist_dir.exists():
+        wr = load_wrist_recordings(args.wrist_dir, rng)
+        if wr is not None:
+            parts.append((wr[0], wr[1], wr[2], "wrst", wr[3]))
 
     X = np.concatenate([p[0] for p in parts])
     y = np.concatenate([p[1] for p in parts])
-    groups = np.concatenate([p[2] for p in parts]).astype("<U8")
+    groups = np.concatenate([p[2] for p in parts]).astype("<U12")
     source = np.concatenate([np.full(len(p[1]), p[3]) for p in parts]).astype("<U4")
-    np.savez_compressed(OUT_FILE, X=X, y=y, groups=groups, source=source,
+    activity = np.concatenate([p[4] for p in parts]).astype("<U24")
+    np.savez_compressed(OUT_FILE, X=X, y=y, groups=groups, source=source, activity=activity,
                         fs=FS_HZ, win=WIN, impact_index=IMPACT_INDEX, gyro_scale=GYRO_SCALE)
     mag = np.linalg.norm(X[:, :, :3], axis=2)
     print(f"[done] {OUT_FILE}  X={X.shape}  falls={int(y.sum())}  adl={int((y == 0).sum())}")

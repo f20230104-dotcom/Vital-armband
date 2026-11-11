@@ -238,7 +238,7 @@ footer a{color:var(--accent)}
   </section>
 
   <footer>
-    <div class="kv"><span>Fall model</span><b>1D-CNN int8, 14 KB</b><span>Held-out accuracy</span><b>98.8 %</b><span>Precision / recall</span><b>99.5 % / 97.9 %</b><span>Training data</span><b>SisFall + synthetic wrist</b></div>
+    <div class="kv"><span>Fall model</span><b>1D-CNN int8, 14 KB</b><span>Accuracy, 17 unseen people</span><b>98.3 %</b><span>Precision / recall</span><b>98.9 % / 97.9 %</b><span>Training data</span><b>SisFall + UCI wrist + synthetic</b></div>
     <div class="kv"><span>Firmware</span><b>ESP32 · FreeRTOS · 4 tasks</b><span>Flash / RAM</span><b>1.06 MB / 86 KB</b><span>Webhook</span><b>POST /api/telemetry</b><span>WiFi</span><b>on only while sending</b></div>
     <div>In this page the fall state machine and the rule-based score run in JavaScript; on the ESP32 the same window goes to the int8 TFLite Micro model (it scores these simulated falls at p = 0.996). Vitals here are the scenario's values with sensor noise. Not a medical device. Source code: <a href="https://github.com/f20230104-dotcom/Vital-armband" target="_blank" rel="noopener">github.com/f20230104-dotcom/Vital-armband</a>.</div>
   </footer>
@@ -249,7 +249,7 @@ footer a{color:var(--accent)}
 "use strict";
 // ---------------------------------------------------------------- constants (match include/config.h)
 const HZ = 50, DT = 1000 / HZ, CYCLE = 240, WIN = 128, IMPACT_IDX = 64;
-const FF_G = 0.5, FF_MIN = 3, IMPACT_G = 2.7, IMPACT_WIN = 1000, SETTLE = 500, STILL = 2500;
+const FF_G = 0.5, FF_MIN = 3, IMPACT_G = 2.7, IMPACT_ONLY_G = 2.0, IMPACT_WIN = 1000, SETTLE = 500, STILL = 2500;
 const STILL_DEV = 0.15, STILL_GYRO = 40, COUNTDOWN_S = 15, COOLDOWN = 10000, P_THR = 0.5;
 const GATE_STD = 0.06, GATE_GYRO = 35, GATE_HOLD = 2000;
 const MED_FIRST = 30, MED_INTERVAL = 150, MED_TIMEOUT = 60, PERSIST = 30, TELEMETRY_S = 15;
@@ -354,7 +354,10 @@ function detUpdate(t, a, w, cancel) {
   const snap = () => { for (let i = 0; i < WIN; i++) { const j = ((det.head + i) % WIN) * 3; det.win[i * 3] = det.ring[j]; det.win[i * 3 + 1] = det.ring[j + 1]; det.win[i * 3 + 2] = det.ring[j + 2]; } det.ready = true; };
   switch (det.state) {
     case "IDLE":
-      if (mag < FF_G) { if (det.ffCount === 0) det.tFf = t; if (++det.ffCount >= FF_MIN) enter("FREE_FALL", "free fall detected (|a| < 0.5 g)"); } else det.ffCount = 0; break;
+      if (mag < FF_G) { if (det.ffCount === 0) det.tFf = t; if (++det.ffCount >= FF_MIN) enter("FREE_FALL", "free fall detected (|a| < 0.5 g)"); }
+      else { det.ffCount = 0;
+        if (mag > IMPACT_ONLY_G) { det.tImpact = t; det.peak = mag; det.ffMs = 0; det.since = 0; det.ready = false; enter("IMPACT", `impact ${mag.toFixed(1)} g without free fall`); } }
+      break;
     case "FREE_FALL":
       if (mag > IMPACT_G) { det.tImpact = t; det.peak = mag; det.ffMs = t - det.tFf; det.since = 0; det.ready = false; enter("IMPACT", `impact ${mag.toFixed(1)} g after ${det.ffMs} ms of free fall`); }
       else if (t - det.tFf > IMPACT_WIN) { det.ffCount = 0; enter("IDLE", "free fall without impact"); } break;
@@ -384,7 +387,11 @@ const sim = { t: 0, speed: 1, btnA: false, btnB: false, btnLong: false, accHist:
   abn: { hr: 0, spo2: 0, rr: 0 }, latched: false, med: null, medCount: 0, battV: 4.15, sent: 0, lastTele: -1, alarm: null, wifiUntil: 0, events: [], nextId: 1 };
 const fmtT = ms => { const s = Math.floor(ms / 1000); return `T+${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 const wall = ms => { const d = new Date(bootWall + ms); return d.toTimeString().slice(0, 8); };
-const bootWall = Date.now() - 48000;
+// Presenter shortcut: open the page with #t62 (any second 1-9999) to jump straight to that point
+// of the scenario, e.g. #t60 fall countdown, #t100 walking, #t186 hypoxia alert, #t241 SOS + missed dose.
+const jumpTo = /^#t(\d{1,4})$/.exec(location.hash);
+const startMs = jumpTo ? Math.max(1, +jumpTo[1]) * 1000 : 48000;
+const bootWall = Date.now() - startMs;
 
 const META = { FALL: ["Fall detected", "crit"], SOS: ["SOS button", "crit"], MED_MISSED: ["Medication missed", "crit"], VITALS_ABNORMAL: ["Abnormal vitals", "crit"],
   FALL_CANCELLED: ["Fall cancelled by wearer", "ok"], MED_TAKEN: ["Medication taken", "ok"], MED_REMINDER: ["Medication reminder", "info"], LOW_BATTERY: ["Low battery", "warn"], BOOT: ["Device boot", "info"] };
@@ -576,10 +583,10 @@ $("bFall").onclick = () => {
 };
 for (const r of document.querySelectorAll('input[name="spd"]')) r.addEventListener("change", () => { sim.speed = +r.value; });
 
-// ---------------------------------------------------------------- boot: fast-forward 48 s so the page opens mid-scenario
+// ---------------------------------------------------------------- boot: fast-forward (48 s, or the #t jump) so the page opens mid-scenario
 buildTimeline(); buildFsm();
 raise("BOOT", "fw 1.0.0, IMU=sim PPG=sim RTC=sim EEPROM=sim");
-while (sim.t < 48000) { step(); if (sim.t % 1000 === 0) medTick(); }
+while (sim.t < startMs) { step(); if (sim.t % 1000 === 0) medTick(); }
 render();
 let last = performance.now(), acc = 0;
 function frame(now) {

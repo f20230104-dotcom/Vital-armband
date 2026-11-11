@@ -20,6 +20,17 @@
 #endif
 #define AUTO_FALLBACK_TO_MOCK true
 
+// Data-logger build (env esp32dev-logger): instead of the four tasks, stream raw 50 Hz IMU
+// samples as CSV over USB serial so real WRIST recordings can be collected for re-training
+// (ml_training/record_wrist_data.py). Button A marks an event in the stream.
+#ifndef DATA_LOGGER_MODE
+#define DATA_LOGGER_MODE false
+#endif
+
+// Task watchdog: a hung sensing task reboots the wristband instead of silently
+// stopping fall detection.
+#define WATCHDOG_TIMEOUT_S        10
+
 #define FW_VERSION          "1.0.0"
 #define DEVICE_ID           "WB-01"
 
@@ -106,6 +117,12 @@
 #define FREEFALL_MIN_SAMPLES      3             // >= 60 ms of free fall
 #define IMPACT_THRESHOLD_G        2.70f         // |a| above -> impact (spec: 2.5-3.0 g)
 #define IMPACT_WINDOW_MS          1000          // impact must follow free fall within 1 s
+// Second trigger path: an impact above this level starts the post-impact check even without
+// a preceding free fall. Measured on held-out SisFall + real-wrist UCI falls, the free-fall ->
+// impact path alone fires for only ~44 % of real falls (people grab, slide or faint); adding this
+// path raises trigger recall to ~99 %. The stillness check and the CNN reject the extra ADL
+// triggers (ml_training/trigger_analysis.py). Set to 0 to use the free-fall path only.
+#define IMPACT_ONLY_THRESHOLD_G   2.0f
 #define POST_IMPACT_SETTLE_MS     500           // ignore bounce right after impact
 #define STILLNESS_MS              2500          // low motion required after impact
 #define STILLNESS_ACC_DEV_G       0.15f         // max | |a| - 1 g | while "still"
@@ -114,6 +131,13 @@
 #define FALL_USE_TFLM             1             // 0 = rule-based fallback score instead of the CNN
 #define FALL_COUNTDOWN_S          15            // user can cancel with any button
 #define FALL_COOLDOWN_MS          10000
+
+// IMU mounting: map the MPU6050 chip axes to the wristband frame used for training
+// (+X along the forearm towards the hand, +Y across the wrist, +Z out of the watch face).
+// Each entry is the chip axis (0=x, 1=y, 2=z) feeding that wristband axis; sign flips it.
+// The threshold state machine uses |a| and is mounting-independent; the CNN is not.
+#define IMU_AXIS_SRC              {0, 1, 2}
+#define IMU_AXIS_SIGN             {1, 1, 1}
 
 // Motion gate for PPG (activity detection on |a| deviation and gyro magnitude)
 #define MOTION_GATE_ACC_STD_G     0.06f
@@ -124,6 +148,9 @@
 // Vitals (MAX30102: 100 sps, 4x averaging -> 25 Hz into the algorithm)
 // -----------------------------------------------------------------------------
 #define PPG_SAMPLE_HZ             25
+// LED drive: the wrist (reflective, through tissue + strap gap) needs more light than a
+// fingertip. 0x3F ~= 12.5 mA; tune during bring-up so raw IR DC sits at 80k-180k counts.
+#define PPG_LED_AMPLITUDE         0x3F
 #define PPG_CONTACT_MIN_IR        30000         // below: no skin contact
 #define RR_DECIMATION             5             // 25 Hz -> 5 Hz for the respiratory band
 #define RR_BAND_LOW_HZ            0.10f

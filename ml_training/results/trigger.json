@@ -1,0 +1,58 @@
+{
+  "free fall <0.5 g (60 ms) then impact >2.7 g (spec)": {
+    "SisFall test": {
+      "trigger_recall_falls": 0.4288,
+      "trigger_rate_adl_peaks": 0.06647157190635451,
+      "system_recall": 0.41386666666666666,
+      "system_false_alarm_rate_adl_peaks": 0.0008361204013377926
+    },
+    "UCI real-wrist test": {
+      "trigger_recall_falls": 0.44032616753150483,
+      "trigger_rate_adl_peaks": 0.01575299306868305,
+      "system_recall": 0.438472942920682,
+      "system_false_alarm_rate_adl_peaks": 0.0
+    }
+  },
+  "free fall <0.6 g then impact >2.0 g": {
+    "SisFall test": {
+      "trigger_recall_falls": 0.8053333333333333,
+      "trigger_rate_adl_peaks": 0.1358695652173913,
+      "system_recall": 0.7824,
+      "system_false_alarm_rate_adl_peaks": 0.002926421404682274
+    },
+    "UCI real-wrist test": {
+      "trigger_recall_falls": 0.7272053372868792,
+      "trigger_rate_adl_peaks": 0.05419029615626969,
+      "system_recall": 0.7186805040770942,
+      "system_false_alarm_rate_adl_peaks": 0.001260239445494644
+    }
+  },
+  "impact >2.7 g only": {
+    "SisFall test": {
+      "trigger_recall_falls": 0.9306666666666666,
+      "trigger_rate_adl_peaks": 0.10911371237458194,
+      "system_recall": 0.9093333333333333,
+      "system_false_alarm_rate_adl_peaks": 0.004180602006688963
+    },
+    "UCI real-wrist test": {
+      "trigger_recall_falls": 0.9091919940696812,
+      "trigger_rate_adl_peaks": 0.05103969754253308,
+      "system_recall": 0.899184581171238,
+      "system_false_alarm_rate_adl_peaks": 0.007561436672967864
+    }
+  },
+  "spec path OR impact >2.0 g (deployed)": {
+    "SisFall test": {
+      "trigger_recall_falls": 0.992,
+      "trigger_rate_adl_peaks": 0.19230769230769232,
+      "system_recall": 0.9637333333333333,
+      "system_false_alarm_rate_adl_peaks": 0.006270903010033445
+    },
+    "UCI real-wrist test": {
+      "trigger_recall_falls": 0.9925871015567087,
+      "trigger_rate_adl_peaks": 0.09640831758034027,
+      "system_recall": 0.9781319495922906,
+      "system_false_alarm_rate_adl_peaks": 0.011342155009451797
+    }
+  }
+}

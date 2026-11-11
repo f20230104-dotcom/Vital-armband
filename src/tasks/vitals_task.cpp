@@ -42,8 +42,10 @@ void vitalsTask(void*) {
     uint32_t lastAlertMs = 0, lastSecond = millis(), lastLog = 0;
 
     TickType_t last = xTaskGetTickCount();
+    wdtSubscribe();
     for (;;) {
         vTaskDelayUntil(&last, pdMS_TO_TICKS(40));          // FIFO holds 32 samples (>1 s @25 Hz)
+        wdtFeed();
         const bool motion = xEventGroupGetBits(g_events) & EVT_MOTION_ACTIVE;
         const int n = hal_readPpg(buf, 32);
         for (int i = 0; i < n; ++i) proc.push(buf[i].red, buf[i].ir, motion);

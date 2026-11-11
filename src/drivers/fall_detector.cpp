@@ -56,6 +56,15 @@ FallDetector::Output FallDetector::update(const ImuSample& s, bool cancelPressed
                 if (++ffCount_ >= FREEFALL_MIN_SAMPLES) enter(FallState::FREE_FALL, t, o, "free fall detected");
             } else {
                 ffCount_ = 0;
+                if (IMPACT_ONLY_THRESHOLD_G > 0 && mag > IMPACT_ONLY_THRESHOLD_G) {
+                    // impact without a clean free fall (slip, grab, faint): let stillness + CNN decide
+                    tImpact_ = t;
+                    peakG_ = mag;
+                    ffMs_ = 0;
+                    samplesSinceImpact_ = 0;
+                    windowReady_ = false;
+                    enter(FallState::IMPACT, t, o, "impact without free fall");
+                }
             }
             break;
 

@@ -125,6 +125,10 @@ extern SemaphoreHandle_t  g_i2cMutex;
 bool raiseAlert(EventType type, uint8_t priority, const char* detail = nullptr,
                 float fall_prob = NAN, float peak_g = NAN);
 
+// Task watchdog (main.cpp): call wdtSubscribe() once at task start, wdtFeed() every loop.
+void wdtSubscribe();
+void wdtFeed();
+
 // Task entry points
 void motionTask(void*);
 void vitalsTask(void*);

@@ -32,8 +32,10 @@ void motionTask(void*) {
     uint32_t readErrors = 0;
     bool gate = false;
 
+    wdtSubscribe();
     for (;;) {
         vTaskDelayUntil(&last, period);
+        wdtFeed();
         if (!hal_readImu(s)) {
             if (readErrors++ % MOTION_SAMPLE_HZ == 0) Serial.println("[motion] IMU read failed");
             continue;

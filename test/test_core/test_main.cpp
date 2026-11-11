@@ -150,6 +150,25 @@ void test_table_slap_is_not_a_fall() {
     TEST_ASSERT_EQUAL(0, r.inferences);
 }
 
+void test_impact_only_trigger_catches_fall_without_free_fall() {
+    // A slide/faint: no free-fall valley, a 3 g impact, then lying still at a new orientation.
+    FallDetector d;
+    int inferences = 0, countdowns = 0;
+    uint32_t t = 0;
+    auto feed = [&](float ax, float ay, float az) {
+        const FallDetector::Output o = d.update(ImuSample{ax, ay, az, 0.5f, -0.3f, 0.2f, t}, false);
+        inferences += o.prob >= 0;
+        countdowns += o.startCountdown;
+        t += 20;
+    };
+    for (int i = 0; i < 150; ++i) feed(0.15f, -0.25f, 0.956f);           // standing, wrist down
+    for (int i = 0; i < 25; ++i) feed(0.15f, -0.25f + 0.02f * i, 0.9f);  // slow slide, |a| ~ 0.9-1.1 g
+    for (int i = 0; i < 4; ++i) feed(1.5f, 2.2f, 1.0f);                   // 2.8 g impact, no free fall
+    for (int i = 0; i < 200; ++i) feed(0.92f, 0.30f, -0.25f);            // lying still on the side
+    TEST_ASSERT_EQUAL(1, inferences);                                     // CNN/score was consulted
+    TEST_ASSERT_EQUAL(1, countdowns);                                     // and the fallback score agrees
+}
+
 void test_walking_sets_motion_gate() {
     sim::MockImu imu;
     FallDetector d;
@@ -188,6 +207,7 @@ int main(int, char**) {
     RUN_TEST(test_fall_cancelled_by_button);
     RUN_TEST(test_jump_is_not_a_fall);
     RUN_TEST(test_table_slap_is_not_a_fall);
+    RUN_TEST(test_impact_only_trigger_catches_fall_without_free_fall);
     RUN_TEST(test_walking_sets_motion_gate);
     RUN_TEST(test_window_alignment);
     return UNITY_END();

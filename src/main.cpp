@@ -7,6 +7,7 @@
 // =============================================================================
 #include <Arduino.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 
 #include "config.h"
 #include "types.h"
@@ -23,6 +24,34 @@ SemaphoreHandle_t  g_i2cMutex = nullptr;
 
 static TaskHandle_t s_tasks[4];
 static const char* const kTaskNames[4] = {"motion", "vitals", "reminder", "alert"};
+
+// ---- task watchdog ------------------------------------------------------------------
+void wdtSubscribe() { esp_task_wdt_add(nullptr); }
+void wdtFeed() { esp_task_wdt_reset(); }
+
+static void watchdogInit() {
+    // Arduino-ESP32 usually starts the TWDT already (then this returns INVALID_STATE and
+    // the core's timeout, typically 5 s, applies). Either way a sensing task that stops
+    // feeding it triggers a panic + reboot.
+    const esp_err_t e = esp_task_wdt_init(WATCHDOG_TIMEOUT_S, true);
+    Serial.printf("[main] task watchdog %s\n", e == ESP_OK ? "armed" : "already running (core default timeout)");
+}
+
+// ---- data-logger mode: raw 50 Hz IMU CSV for collecting real wrist recordings -------------
+static void loggerTask(void*) {
+    wdtSubscribe();
+    Serial.println("# vital-wristband imu-logger v1 hz=50 cols=t_ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps,mark");
+    TickType_t last = xTaskGetTickCount();
+    ImuSample s;
+    for (;;) {
+        vTaskDelayUntil(&last, pdMS_TO_TICKS(1000 / MOTION_SAMPLE_HZ));
+        wdtFeed();
+        if (!hal_readImu(s)) continue;
+        const int mark = (xEventGroupClearBits(g_events, EVT_BTN_ANY_SHORT) & EVT_BTN_ANY_SHORT) ? 1 : 0;
+        Serial.printf("%lu,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%d\n", (unsigned long)s.t_ms, s.ax, s.ay, s.az, s.gx, s.gy,
+                      s.gz, mark);
+    }
+}
 
 bool raiseAlert(EventType type, uint8_t priority, const char* detail, float fall_prob, float peak_g) {
     AlertMsg m{};
@@ -62,6 +91,13 @@ void setup() {
         Serial.println("[main] HAL init failed - halting");
         for (;;) delay(1000);
     }
+    watchdogInit();
+
+    if (DATA_LOGGER_MODE) {
+        Serial.printf("[main] DATA_LOGGER_MODE: streaming IMU (%s)\n", hal_sensorSummary());
+        xTaskCreatePinnedToCore(loggerTask, "logger", 4096, nullptr, MOTION_TASK_PRIO, &s_tasks[0], MOTION_TASK_CORE);
+        return;
+    }
 
     if (FALL_USE_TFLM && fallClassifierInit()) {
         float pf = 0, pa = 0;
@@ -92,6 +128,7 @@ void loop() {
     const uint32_t now = millis();
 
     hal_pollButtons();
+    if (DATA_LOGGER_MODE) { vTaskDelay(pdMS_TO_TICKS(20)); return; }
 
     // SOS: long press on button A
     if (xEventGroupClearBits(g_events, EVT_BTN_A_LONG) & EVT_BTN_A_LONG) {
@@ -118,7 +155,7 @@ void loop() {
         Serial.printf("[sys] up %lus heap %u (min %u) fall=%s stack-free:", (unsigned long)(now / 1000),
                       ESP.getFreeHeap(), ESP.getMinFreeHeap(), fallStateName(motionCurrentState()));
         for (int i = 0; i < 4; ++i)
-            Serial.printf(" %s=%u", kTaskNames[i], (unsigned)uxTaskGetStackHighWaterMark(s_tasks[i]));
+            if (s_tasks[i]) Serial.printf(" %s=%u", kTaskNames[i], (unsigned)uxTaskGetStackHighWaterMark(s_tasks[i]));
         Serial.println();
     }
     vTaskDelay(pdMS_TO_TICKS(20));

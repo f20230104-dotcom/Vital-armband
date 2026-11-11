@@ -31,54 +31,79 @@ alert log and a clickable wristband in the browser. The full Gradio dashboard (w
 
 | Path | What it is |
 |---|---|
-| `platformio.ini` | `esp32dev` (simulation, default), `esp32dev-hw` (real sensors), `native` (host unit tests) |
+| `platformio.ini` | `esp32dev` (simulation, default), `esp32dev-hw` (real sensors), `esp32dev-logger` (raw wrist IMU logger), `native` (host unit tests) |
 | `include/config.h` | Pin map, I²C addresses, thresholds, task layout, WiFi/webhook |
 | `include/types.h` | Sample structs, `AlertMsg`, `VitalsSnapshot`, event-group bits, RTOS handles |
-| `include/fall_model_data.h` | **Generated** int8 TFLite flatbuffer (14 KB) + quant params + boot self-test vectors |
+| `include/fall_model_data.h` | **Generated** int8 TFLite flatbuffer (13.8 KB) + quant params + boot self-test vectors |
 | `include/mock_sensors.h` | Simulated IMU / PPG / battery driven by a scripted 240 s scenario |
 | `src/main.cpp` | Queue/event-group setup, task creation, supervisor loop (SOS, battery, health) |
 | `src/tasks/*.cpp` | `motion_task`, `vitals_task`, `reminder_task`, `alert_task` |
 | `src/drivers/hardware_hal.cpp` | Real drivers (Adafruit MPU6050, SparkFun MAX3010x, RTClib, AT24C32) with per-sensor fallback to mocks |
 | `src/drivers/dsp_filters.cpp` | Biquads, the 0.1–0.5 Hz respiratory band-pass, running stats |
 | `src/drivers/ppg_processor.cpp` | HR (peak detection), SpO₂ (ratio-of-ratios), RR (baseline band-pass) with motion gate |
-| `src/drivers/fall_detector.cpp` | `IDLE → FREE_FALL → IMPACT → POST_IMPACT → INFERENCE → COUNTDOWN` state machine |
+| `src/drivers/fall_detector.cpp` | Two-path trigger (free fall → impact, or impact > 2 g) → stillness → CNN → countdown |
 | `src/ml/fall_classifier.cpp` | TensorFlow Lite Micro interpreter wrapper (6-op resolver, 24 KB arena) |
-| `ml_training/` | `fetch_dataset.py` → `train_model.py` → `export_to_c.py` (+ `verify_sim_windows.py`) |
+| `ml_training/` | `fetch_dataset.py` → `train_model.py` → `export_to_c.py`; `experiments.py`, `trigger_analysis.py`, `record_wrist_data.py`, `verify_sim_windows.py` |
 | `dashboard/` | `server.py` (FastAPI webhook receiver + SQLite), `app.py` (Gradio UI), `device_simulator.py` |
-| `test/test_core/` | 14 Unity tests for DSP, vitals and the fall state machine (`pio test -e native`) |
+| `test/test_core/` | 15 Unity tests for DSP, vitals and the fall state machine (`pio test -e native`) |
 | `tools/host_sim.cpp` | Runs the firmware's sensing logic on a PC, faster than real time |
-| `web_demo/` | Static in-browser command center deployed to the Hugging Face Space |
+| `web_demo/` | Static in-browser command center deployed to the Hugging Face Space (`#t62` jumps to second 62) |
+| `docs/` | Presentation (`.pptx`), its build script, dashboard screenshots |
 
-## 1. ML pipeline (official SisFall dataset)
+## 1. ML pipeline (three datasets, 75 people)
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r ml_training/requirements.txt
-python ml_training/fetch_dataset.py   # downloads SisFall (230 MB), windows it, adds synthetic wrist data
-python ml_training/train_model.py     # 1D-CNN, subject-wise split, int8 quantisation
-python ml_training/export_to_c.py     # -> include/fall_model_data.h
+python ml_training/fetch_dataset.py             # SisFall (230 MB) + synthetic wrist windows -> data/dataset.npz
+python ml_training/fetch_dataset.py --uci-only  # UCI wrist data (see below) -> data/uci_wrist.npz
+python ml_training/train_model.py               # deployed recipe: + UCI wrist training + rotation augmentation
+python ml_training/export_to_c.py               # -> include/fall_model_data.h
+python ml_training/experiments.py               # evaluation study (~20 min) -> results/experiments.json + figures
+python ml_training/trigger_analysis.py          # trigger recall study -> results/trigger.json
 ```
 
-* **Dataset:** SisFall (Sucerquia et al., *Sensors* 2017): 38 subjects incl. 15 elderly, 19 ADL + 15 fall types,
-  4,505 trials. The official UdeA link is offline, so the script falls back to a GitHub mirror of the raw files,
-  and finally to a fully synthetic generator (free-fall valley < 0.5 g, impact 2.5–7 g, post-impact stillness).
-* **Windows:** 200 Hz → 50 Hz, 128 samples (2.56 s), 6 channels (accel g, gyro dps/500). Falls are centred on the
-  impact peak (±10 samples jitter); ADL negatives are centred on each trial's strongest peaks: the hard cases
-  the threshold trigger would actually send to the model.
-* **SisFall is waist-worn**, so 5,000 synthetic *wrist* windows (arm swing, jumps, table slaps, sit-downs,
-  falls with orientation change) are mixed in. Re-train on real wrist data once you have the hardware.
-* **Model:** 4×Conv(k,1) + GAP + Dense, 5,825 params, **14 KB int8**, ops: CONV_2D, MAX_POOL_2D, MEAN,
+| Dataset | Sensor / placement | People | Trials → windows | Role |
+|---|---|---|---|---|
+| **SisFall** (Sucerquia et al., *Sensors* 2017) | ADXL345 + ITG3200, waist, 200 Hz | 38 (15 aged 60+) | 4,505 → 18,469 | train / validate / test |
+| **UCI Simulated Falls & ADL** (Özdemir & Barshan, *Sensors* 2014) | Xsens MTw, **right wrist**, 25 Hz | 17 | 3,326 → 14,497 | 12 train, 5 unseen test |
+| **Synthetic wrist** (our generator) | physics model of wrist falls / ADLs | 20 virtual | → 5,000 | augmentation |
+
+* SisFall's official UdeA link is offline; `fetch_dataset.py` uses a GitHub mirror of the raw files and falls back to
+  the synthetic generator. UCI dataset 455 is a 1.2 GB archive of nested RARs: extract only the right-wrist files
+  (`*/340537.txt`, never the volunteers' `Bilgi.txt` info files) into `ml_training/data/raw/uci_falls/wrist/`.
+* **Preparation:** unit conversion (g, °/s), resampling to 50 Hz, 128-sample windows with the impact at sample 64
+  (±10 jitter, the same alignment the firmware uses), ADL hard negatives centred on each trial's 3 strongest peaks,
+  **subject-wise** splits, augmentation (random 3-D rotation ±180°, gain 0.9–1.1, noise σ 0.02), balanced class weights.
+* **Model:** 4×Conv(k,1) + GAP + Dense, 5,825 params, 182.8 k MACs, **13.8 KB int8**; ops CONV_2D, MAX_POOL_2D, MEAN,
   FULLY_CONNECTED, LOGISTIC, RESHAPE.
+* Real recordings from your own wristband (`pio run -e esp32dev-logger` + `ml_training/record_wrist_data.py`) are
+  picked up automatically from `ml_training/data/wrist/`.
 
-**Held-out-subject results (int8 model, 4,767 test windows from 12 unseen subjects):**
+**Deployed int8 model, 9,052 test windows from 17 people never used in training:**
 
-| | Accuracy | Precision | Recall | F1 | Specificity |
-|---|---|---|---|---|---|
-| All | 98.83 % | 99.47 % | 97.88 % | 98.67 % | 99.58 % |
-| SisFall only | 98.78 % | 99.51 % | 97.71 % | 98.60 % | 99.62 % |
-| Synthetic wrist | 99.20 % | 99.20 % | 99.20 % | 99.20 % | 99.20 % |
+| Test set | Accuracy | Precision | Recall | F1 |
+|---|---|---|---|---|
+| SisFall (12 held-out subjects) | 98.1 % | 98.5 % | 97.1 % | 0.978 |
+| **UCI real wrist (5 held-out volunteers)** | **98.4 %** | **99.1 %** | **98.4 %** | **0.987** |
+| All | 98.3 % | 98.9 % | 97.9 % | 0.984 (AUC 0.995) |
 
-float32 vs int8 decision agreement: 99.87 %.
+**Experiments** (`ml_training/results/`, all subject-wise):
+
+* **Baselines:** threshold rules F1 ≈ 0.25; rule-based score 0.85; Random Forest (42 features, ~1.4 MB) 0.98 SisFall /
+  0.955 wrist; the 14 KB CNN 0.98 / 0.987.
+* **Ablation:** real-wrist recall 80.2 % (SisFall only) → 97.3 % with rotation augmentation → 98.4 % with UCI wrist
+  training + rotation (deployed).
+* **5-fold cross-validation (75 people):** accuracy 98.9 ± 0.2 %, precision 99.3 ± 0.1 %, recall 98.7 ± 0.4 %,
+  AUC 0.999.
+* **Trigger analysis:** the free-fall (< 0.5 g, 60 ms) → impact (> 2.7 g) trigger alone fires for only 43–44 % of real
+  falls, so the firmware adds an impact-only path (> 2.0 g, `IMPACT_ONLY_THRESHOLD_G`); trigger recall 99 %,
+  system recall (trigger × CNN) 96.4 % SisFall / 97.8 % wrist.
+* **Firmware simulation:** 80 simulated minutes: 20/20 falls, 0/40 false alerts from jumps and table slaps; vital-sign
+  MAE HR 3.4 bpm, SpO₂ 1.1 %, RR 2.4 /min.
+
+Presentation (BITS template, 34 slides): [`docs/Vital_Wristband_BITS_F312.pptx`](docs/Vital_Wristband_BITS_F312.pptx),
+rebuilt from the results by `python docs/presentation/build_presentation.py`.
 
 ## 2. Dashboard
 
@@ -118,7 +143,7 @@ pio run -e esp32dev -t upload && pio device monitor
 |---|---|---|
 | 15–40 | walking | PPG motion-gated (values frozen, no false alarms) |
 | 35 | jump (real free fall + 3.8 g landing) | `FREE_FALL → IMPACT → IDLE (wearer recovered)` |
-| 55 | forward fall, lying still | CNN p≈0.996 → 15 s countdown → **FALL** |
+| 55 | forward fall, lying still | CNN p = 0.996 → 15 s countdown → **FALL** |
 | 110 | lateral fall, button A at 120 s | **FALL_CANCELLED** |
 | 132 | wrist slaps a table (4 g, no free fall) | nothing |
 | 145–195 | hypoxia: SpO₂ 87 %, HR 122, RR 25 | **VITALS_ABNORMAL** after 30 s persistence |
@@ -127,6 +152,12 @@ pio run -e esp32dev -t upload && pio device monitor
 
 * Build with real sensors: `pio run -e esp32dev-hw`. Missing chips fall back to mocks individually
   (`AUTO_FALLBACK_TO_MOCK`); payloads carry `"sim": true` whenever any mock is active.
+* **Hardware bring-up aids:** the hardware build prints an I²C bus scan against the expected addresses, runs the
+  model self-test, logs inference time and tensor-arena use, and arms a task watchdog. Set the sensor mounting with
+  `IMU_AXIS_SRC` / `IMU_AXIS_SIGN` and the wrist LED drive with `PPG_LED_AMPLITUDE` in `include/config.h`.
+* **Collect real wrist data:** `pio run -e esp32dev-logger -t upload`, then
+  `python ml_training/record_wrist_data.py --port <port> --subject W01 --activity F01 --seconds 15`
+  (falls only by healthy volunteers onto crash mats).
 
 ### Pin map
 
@@ -154,7 +185,7 @@ pio run -e esp32dev -t upload && pio device monitor
 ## 4. Verification without hardware
 
 ```bash
-pio test -e native                                    # 14 unit tests
+pio test -e native                                    # 15 unit tests
 c++ -std=c++17 -O2 -Iinclude tools/host_sim.cpp src/drivers/dsp_filters.cpp \
     src/drivers/ppg_processor.cpp src/drivers/fall_detector.cpp -o host_sim
 ./host_sim 480 windows.csv                            # firmware event timeline, 8 simulated minutes

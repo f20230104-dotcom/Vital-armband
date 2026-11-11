@@ -44,8 +44,10 @@ void reminderTask(void*) {
     uint32_t pendingSince = 0, lastNag = 0;
     char detail[64];
 
+    wdtSubscribe();
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(250));
+        wdtFeed();
 
         if (hal_rtcAlarmFired()) {
             if (pending) {                    // previous dose never confirmed -> escalate now

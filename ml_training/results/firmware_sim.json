@@ -1,0 +1,11 @@
+{
+  "source": "tools/host_sim.cpp, 4800 s (20 scenario cycles), firmware modules compiled on a PC; pio test -e native; pio run for 4 build variants",
+  "minutes": 80, "cycles": 20,
+  "falls_total": 20, "falls_detected": 20, "cancels_total": 20, "cancels_handled": 20,
+  "hard_negatives": 40, "false_triggers": 0,
+  "events": {"FALL": 20, "FALL_CANCELLED": 20, "SOS": 20, "MED_REMINDER": 32, "MED_TAKEN": 16, "MED_MISSED": 16, "VITALS_ABNORMAL": 20},
+  "hr_mae": 3.40, "hr_rmse": 7.36, "spo2_mae": 1.08, "spo2_rmse": 2.16, "rr_mae": 2.36, "rr_rmse": 4.68,
+  "tests": 15,
+  "flash": "1.08 MB (55 %)", "ram": "86 KB (26 %)",
+  "build": "ESP32 firmware compiles in simulation, hardware, data-logger and hardware-with-WiFi modes (flash 1.08 MB of 1.9 MB, static RAM 86 KB of 320 KB)."
+}

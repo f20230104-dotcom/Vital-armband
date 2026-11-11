@@ -114,8 +114,8 @@ void hal_alarmStop(AlarmPattern p) {
 [[maybe_unused]] static bool initPpg() {
     I2cLock l;
     if (!s_max.begin(Wire, I2C_CLOCK_HZ, ADDR_MAX30102)) return false;
-    // LED 0x1F (~6.4 mA), 4x averaging, red+IR, 100 sps -> 25 Hz output, 411 us, 4096 nA range
-    s_max.setup(0x1F, 4, 2, 100, 411, 4096);
+    // LED PPG_LED_AMPLITUDE, 4x averaging, red+IR, 100 sps -> 25 Hz output, 411 us (18-bit), 16384 nA range
+    s_max.setup(PPG_LED_AMPLITUDE, 4, 2, 100, 411, 16384);
     return true;
 }
 
@@ -156,6 +156,13 @@ bool hal_init() {
     for (bool& s : s_sim) s = true;
 #else
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_CLOCK_HZ);
+    // Bring-up aid: list every device on the bus next to what the wristband expects.
+    Serial.print("[hal] I2C scan:");
+    int found = 0;
+    for (uint8_t a = 0x08; a < 0x78; ++a)
+        if (i2cPresent(a)) { Serial.printf(" 0x%02X", a); ++found; }
+    Serial.printf("  (%d devices; expect MPU6050 0x%02X, MAX30102 0x%02X, DS3231 0x%02X, EEPROM 0x%02X)\n", found,
+                  ADDR_MPU6050, ADDR_MAX30102, ADDR_DS3231, ADDR_EEPROM);
     s_sim[(int)Sensor::IMU] = !(i2cPresent(ADDR_MPU6050) && initImu());
     s_sim[(int)Sensor::PPG] = !(i2cPresent(ADDR_MAX30102) && initPpg());
     s_sim[(int)Sensor::RTC] = !(i2cPresent(ADDR_DS3231) && initRtc());
@@ -197,8 +204,12 @@ bool hal_readImu(ImuSample& out) {
         if (!l.ok || !s_mpu.getEvent(&a, &g, &temp)) return false;
     }
     constexpr float kG = 9.80665f, kDeg = 57.2957795f;
-    out = ImuSample{a.acceleration.x / kG, a.acceleration.y / kG, a.acceleration.z / kG,
-                    g.gyro.x * kDeg, g.gyro.y * kDeg, g.gyro.z * kDeg, now};
+    static constexpr int kSrc[3] = IMU_AXIS_SRC;
+    static constexpr int kSign[3] = IMU_AXIS_SIGN;
+    const float acc[3] = {a.acceleration.x / kG, a.acceleration.y / kG, a.acceleration.z / kG};
+    const float gyr[3] = {g.gyro.x * kDeg, g.gyro.y * kDeg, g.gyro.z * kDeg};
+    out = ImuSample{kSign[0] * acc[kSrc[0]], kSign[1] * acc[kSrc[1]], kSign[2] * acc[kSrc[2]],
+                    kSign[0] * gyr[kSrc[0]], kSign[1] * gyr[kSrc[1]], kSign[2] * gyr[kSrc[2]], now};
     return true;
 }
 
