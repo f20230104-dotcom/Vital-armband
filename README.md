@@ -19,7 +19,7 @@ the firmware has a full `SIMULATION_MODE`, and the dashboard ships with a virtua
 
 **Live demo:** https://huggingface.co/spaces/kkshik/vital-wristband. It runs the simulation scenario, fall state machine,
 alert log and a clickable wristband in the browser. The full Gradio dashboard (with the ESP32 webhook) runs locally with
-`python dashboard/app.py --simulate`.
+`python dashboard/app.py --simulate`. The demo's source is [`web_demo/`](web_demo) (upload both files to a Static Space to redeploy).
 
 ```
  MPU6050 ─┐                    ┌─ motion_task  (50 Hz, fall FSM + TFLite Micro CNN) ─┐
@@ -47,6 +47,7 @@ alert log and a clickable wristband in the browser. The full Gradio dashboard (w
 | `dashboard/` | `server.py` (FastAPI webhook receiver + SQLite), `app.py` (Gradio UI), `device_simulator.py` |
 | `test/test_core/` | 14 Unity tests for DSP, vitals and the fall state machine (`pio test -e native`) |
 | `tools/host_sim.cpp` | Runs the firmware's sensing logic on a PC, faster than real time |
+| `web_demo/` | Static in-browser command center deployed to the Hugging Face Space |
 
 ## 1. ML pipeline (official SisFall dataset)
 

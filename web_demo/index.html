@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vital Wristband Command Center</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: patient-monitor console. Header strip, alarm banner, then monitor (vitals + traces) beside the device panel, alert log full width. */
+:root{
+  --bg:#eef3f4; --surface:#ffffff; --surface-2:#f6f9fa; --ink:#0f1d24; --muted:#56666e; --line:#d5e0e4;
+  --accent:#0b6e78; --accent-ink:#ffffff;
+  --hr:#138a3e; --spo2:#0a7fa3; --rr:#9a6a00; --batt:#56666e;
+  --crit:#c62828; --crit-soft:#fbe4e4; --warn:#a85f00; --warn-soft:#fdf0dc; --ok:#25744a; --ok-soft:#e1f2e8;
+  --trace:#0b6e78; --grid:#e3eaed;
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-head:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#081115; --surface:#0f1b21; --surface-2:#13232a; --ink:#e2ecef; --muted:#8ea3ab; --line:#213740;
+  --accent:#3bb9c5; --accent-ink:#04191c;
+  --hr:#4fe07f; --spo2:#45d4ff; --rr:#ffd34d; --batt:#a9bcc3;
+  --crit:#ff5a5a; --crit-soft:#3a1517; --warn:#f2a33a; --warn-soft:#3a2810; --ok:#4cc38a; --ok-soft:#10301f;
+  --trace:#3bb9c5; --grid:#1a2c33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#081115; --surface:#0f1b21; --surface-2:#13232a; --ink:#e2ecef; --muted:#8ea3ab; --line:#213740;
+  --accent:#3bb9c5; --accent-ink:#04191c;
+  --hr:#4fe07f; --spo2:#45d4ff; --rr:#ffd34d; --batt:#a9bcc3;
+  --crit:#ff5a5a; --crit-soft:#3a1517; --warn:#f2a33a; --warn-soft:#3a2810; --ok:#4cc38a; --ok-soft:#10301f;
+  --trace:#3bb9c5; --grid:#1a2c33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+h1,h2,h3{font-family:var(--f-head);text-wrap:balance;margin:0}
+h1{font-size:1.65rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.02rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+button:focus-visible,.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.sub{color:var(--muted);margin-top:2px;max-width:62ch}
+.hdr-right{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:.82rem;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.live{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.seg label{display:block}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;padding:5px 11px;font-size:.82rem;font-family:var(--f-num)}
+.seg input:checked+span{background:var(--accent);color:var(--accent-ink)}
+
+/* banner */
+.banner{border-radius:var(--r);padding:12px 16px;font-weight:600;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid transparent}
+.banner.ok{background:var(--ok-soft);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.banner.warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.banner.crit{background:var(--crit);color:#fff;animation:flash 1s steps(2,start) infinite}
+@keyframes flash{50%{background:color-mix(in srgb,var(--crit) 70%,#ffffff)}}
+.banner .grow{flex:1;min-width:0}
+.banner button{border:1px solid currentColor;background:transparent;color:inherit;border-radius:8px;padding:5px 12px;font-weight:600}
+
+/* main grid */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+@media (max-width:920px){.main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:12px;min-width:0}
+.panel-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:.8rem}
+
+/* vitals */
+.vitals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.vitals{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.v{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:2px;min-width:0;position:relative}
+.v .lbl{font-family:var(--f-head);font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+.v .val{font-family:var(--f-num);font-size:2.15rem;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.v .unit{font-size:.85rem;font-weight:500;color:var(--muted);margin-left:3px}
+.v .meta{font-size:.76rem;color:var(--muted);font-family:var(--f-num)}
+.v.hr .val{color:var(--hr)} .v.spo2 .val{color:var(--spo2)} .v.rr .val{color:var(--rr)} .v.batt .val{color:var(--batt)}
+.v.alarm{border-color:var(--crit);box-shadow:inset 0 0 0 1px var(--crit)}
+.v.alarm .lbl::after{content:"ALARM";color:var(--crit);font-weight:700}
+.v.stale .val{opacity:.45}
+.v.stale .lbl::after{content:"GATED";color:var(--warn);font-weight:700}
+
+.traces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.traces{grid-template-columns:minmax(0,1fr)}}
+.trace{border:1px solid var(--line);border-radius:8px;padding:8px 10px 6px;background:var(--surface-2);min-width:0}
+.trace .t{font-family:var(--f-head);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+canvas{display:block;width:100%;max-width:100%}
+.c-trend{height:92px}
+.c-acc{height:150px}
+
+/* state machine */
+.fsm{display:flex;flex-wrap:wrap;gap:6px}
+.fsm span{font-family:var(--f-num);font-size:.72rem;padding:4px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted);background:var(--surface-2)}
+.fsm span.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.fsm span.on.hot{background:var(--crit);border-color:var(--crit);color:#fff}
+.fsm-note{font-family:var(--f-num);font-size:.78rem;color:var(--muted);min-height:1.2em}
+
+/* device */
+.device{display:grid;justify-items:center;gap:10px;padding-block:6px}
+.band{position:relative;width:240px;height:132px;border-radius:30px;background:linear-gradient(180deg,#1f2a30,#10171b);display:grid;place-items:center;box-shadow:0 10px 24px -14px #000}
+.band::before,.band::after{content:"";position:absolute;left:50%;transform:translateX(-50%);width:120px;height:26px;background:#2b363c}
+.band::before{top:-24px;border-radius:12px 12px 0 0}.band::after{bottom:-24px;border-radius:0 0 12px 12px}
+.oled{width:178px;height:92px;border-radius:10px;background:#000;color:#cfe;font-family:var(--f-num);font-size:11px;padding:7px 9px;display:grid;align-content:space-between;border:1px solid #2e3b41}
+.oled b{font-size:22px;color:#5df28a;font-weight:600}
+.oled b small{font-size:10px;color:#9fb;margin-left:2px;font-weight:400}
+.oled .row span{white-space:nowrap}
+.oled .row{display:flex;justify-content:space-between}
+.oled .msg{color:#ffd34d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oled .msg.hot{color:#ff6b6b}
+.hwbtn{position:absolute;right:-14px;width:16px;height:30px;border-radius:0 6px 6px 0;border:0;background:#5b6a71;color:transparent}
+.hwbtn.a{top:26px}.hwbtn.b{bottom:26px}
+.hwbtn:active{background:#8ea0a8;transform:translateX(-2px)}
+.band.buzz{animation:buzz .12s linear infinite}
+@keyframes buzz{25%{transform:translateX(-1.5px)}75%{transform:translateX(1.5px)}}
+@media (prefers-reduced-motion:reduce){.band.buzz,.banner.crit,.dot.live,tr.open.crit td{animation:none}}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+.btn{border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:8px;padding:8px 10px;font-weight:600;font-size:.85rem;text-align:left;display:grid;gap:1px}
+.btn small{font-weight:400;color:var(--muted);font-size:.74rem}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary small{color:inherit;opacity:.8}
+.outs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.out{font-family:var(--f-num);font-size:.72rem;border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--muted)}
+.out.on{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+
+/* scenario timeline */
+.timeline{position:relative;height:30px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.timeline .seg-b{position:absolute;top:0;bottom:0;opacity:.9}
+.timeline .cursor{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.76rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* log */
+.logwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:620px}
+th{font-family:var(--f-head);text-transform:uppercase;letter-spacing:.07em;font-size:.74rem;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-weight:600}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.when{font-family:var(--f-num);white-space:nowrap;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--f-num);font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.pill.crit{color:var(--crit)}.pill.warn{color:var(--warn)}.pill.ok{color:var(--ok)}.pill.info{color:var(--muted)}
+tr.open.crit td{background:var(--crit-soft);animation:row 1.2s ease-in-out infinite}
+@keyframes row{50%{background:color-mix(in srgb,var(--crit-soft) 40%,var(--crit) 22%)}}
+tr.acked td{opacity:.6}
+td .detail{color:var(--muted);font-size:.8rem}
+.ack{border:1px solid var(--crit);color:var(--crit);background:transparent;border-radius:6px;padding:2px 9px;font-size:.78rem;font-weight:600}
+
+footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;color:var(--muted);font-size:.82rem}
+footer b{color:var(--ink);font-family:var(--f-num);font-weight:600}
+footer a{color:var(--accent)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+</style>
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Vital Wristband Command Center</h1>
+      <p class="sub">Caregiver console for ESP32 wristbands. This demo replays the firmware's <span class="num">SIMULATION_MODE</span> scenario in your browser: falls, a jump, a table slap, a hypoxia episode, medication doses and an SOS.</p>
+    </div>
+    <div class="hdr-right">
+      <span class="chip"><span class="dot live" id="liveDot"></span><span id="devChip">WB-01 · simulated</span></span>
+      <span class="chip num" id="clock">T+00:00</span>
+      <div class="seg" role="radiogroup" aria-label="Simulation speed">
+        <label><input type="radio" name="spd" id="spd1" value="1" checked><span>1×</span></label>
+        <label><input type="radio" name="spd" id="spd4" value="4"><span>4×</span></label>
+        <label><input type="radio" name="spd" id="spd10" value="10"><span>10×</span></label>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner ok" id="banner" role="status" aria-live="polite"><span class="grow" id="bannerText">WB-01 OK</span></div>
+
+  <div class="main">
+    <section class="panel" aria-label="Monitor">
+      <div class="panel-hd"><h2>Live vitals</h2><span class="hint" id="vitHint">MAX30102 · 1 s estimates · alarms after 30 s persistence</span></div>
+      <div class="vitals">
+        <div class="v hr" id="vHr"><div class="lbl">Heart rate</div><div class="val"><span id="hr">--</span><span class="unit">bpm</span></div><div class="meta">alarm &lt;40 / &gt;130</div></div>
+        <div class="v spo2" id="vSpo2"><div class="lbl">SpO₂</div><div class="val"><span id="spo2">--</span><span class="unit">%</span></div><div class="meta">alarm &lt;90</div></div>
+        <div class="v rr" id="vRr"><div class="lbl">Resp. rate</div><div class="val"><span id="rr">--</span><span class="unit">/min</span></div><div class="meta">PPG band 0.1–0.5 Hz</div></div>
+        <div class="v batt" id="vBatt"><div class="lbl">Battery</div><div class="val"><span id="bv">--</span><span class="unit">V</span></div><div class="meta" id="bpct">--</div></div>
+      </div>
+      <div class="traces">
+        <div class="trace"><div class="t"><span>HR trend</span><span class="num">2 min</span></div><canvas class="c-trend" id="cHr"></canvas></div>
+        <div class="trace"><div class="t"><span>SpO₂ trend</span><span class="num">2 min</span></div><canvas class="c-trend" id="cSpo2"></canvas></div>
+        <div class="trace"><div class="t"><span>RR trend</span><span class="num">2 min</span></div><canvas class="c-trend" id="cRr"></canvas></div>
+      </div>
+      <div class="panel-hd"><h2>Motion · fall detector</h2><span class="hint">MPU6050 @ 50 Hz · |a| with free-fall 0.5 g and impact 2.7 g thresholds</span></div>
+      <div class="trace"><div class="t"><span>Acceleration magnitude |a| (g)</span><span class="num" id="accNow">--</span></div><canvas class="c-acc" id="cAcc"></canvas></div>
+      <div class="fsm" id="fsm"></div>
+      <div class="fsm-note" id="fsmNote">waiting for first sample</div>
+      <div class="panel-hd"><h2>Scenario</h2><span class="hint num" id="cycleLbl">cycle 240 s</span></div>
+      <div class="timeline" id="timeline"><div class="cursor" id="cursor"></div></div>
+      <div class="legend"><span><i style="background:var(--ok-soft);outline:1px solid var(--ok)"></i>rest</span><span><i style="background:var(--warn-soft);outline:1px solid var(--warn)"></i>walking / gestures (PPG gated)</span><span><i style="background:var(--surface-2);outline:1px solid var(--muted)"></i>lying after fall</span><span><i style="background:var(--crit-soft);outline:1px solid var(--crit)"></i>hypoxia episode</span></div>
+    </section>
+
+    <aside class="panel" aria-label="Wristband">
+      <div class="panel-hd"><h2>Device WB-01</h2><span class="hint">tap the side buttons</span></div>
+      <div class="device">
+        <div class="band" id="band">
+          <div class="oled" aria-live="polite">
+            <div class="row"><span id="oTime">--:--</span><span id="oBatt">--%</span></div>
+            <div class="row" style="align-items:baseline"><b id="oHr">--</b><span id="oSpo">SpO₂ --</span></div>
+            <div class="msg" id="oMsg">ready</div>
+          </div>
+          <button class="hwbtn a" id="hwA" aria-label="Button A: cancel fall, hold for SOS">A</button>
+          <button class="hwbtn b" id="hwB" aria-label="Button B: confirm medication">B</button>
+        </div>
+        <div class="outs"><span class="out" id="outBuzz">BUZZER GPIO25</span><span class="out" id="outVib">MOTOR GPIO26</span><span class="out" id="outWifi">WiFi off</span></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="bA">Button A<small>cancel fall countdown</small></button>
+        <button class="btn" id="bB">Button B<small>confirm medication</small></button>
+        <button class="btn" id="bSos">Hold A 2 s<small>send SOS</small></button>
+        <button class="btn primary" id="bFall">Trigger a fall<small>free fall + 4.5 g impact</small></button>
+      </div>
+      <div class="kv hint">
+        <span>Fall FSM</span><span class="num" id="kvState">IDLE</span>
+        <span>Last score</span><span class="num" id="kvProb">--</span>
+        <span>Motion gate</span><span class="num" id="kvGate">off</span>
+        <span>Next dose</span><span class="num" id="kvDose">--</span>
+        <span>Messages sent</span><span class="num" id="kvSent">0</span>
+      </div>
+    </aside>
+  </div>
+
+  <section class="panel" aria-label="Alert log">
+    <div class="panel-hd"><h2>Alert log</h2><button class="btn" id="ackAll" style="padding:5px 12px">Acknowledge all open</button></div>
+    <div class="logwrap"><table><thead><tr><th>Time</th><th>Event</th><th>Vitals at event</th><th>Details</th><th></th></tr></thead><tbody id="log"></tbody></table></div>
+  </section>
+
+  <footer>
+    <div class="kv"><span>Fall model</span><b>1D-CNN int8, 14 KB</b><span>Held-out accuracy</span><b>98.8 %</b><span>Precision / recall</span><b>99.5 % / 97.9 %</b><span>Training data</span><b>SisFall + synthetic wrist</b></div>
+    <div class="kv"><span>Firmware</span><b>ESP32 · FreeRTOS · 4 tasks</b><span>Flash / RAM</span><b>1.06 MB / 86 KB</b><span>Webhook</span><b>POST /api/telemetry</b><span>WiFi</span><b>on only while sending</b></div>
+    <div>In this page the fall state machine and the rule-based score run in JavaScript; on the ESP32 the same window goes to the int8 TFLite Micro model (it scores these simulated falls at p = 0.996). Vitals here are the scenario's values with sensor noise. Not a medical device. Source code: <a href="https://github.com/f20230104-dotcom/Vital-armband" target="_blank" rel="noopener">github.com/f20230104-dotcom/Vital-armband</a>.</div>
+  </footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+// ---------------------------------------------------------------- constants (match include/config.h)
+const HZ = 50, DT = 1000 / HZ, CYCLE = 240, WIN = 128, IMPACT_IDX = 64;
+const FF_G = 0.5, FF_MIN = 3, IMPACT_G = 2.7, IMPACT_WIN = 1000, SETTLE = 500, STILL = 2500;
+const STILL_DEV = 0.15, STILL_GYRO = 40, COUNTDOWN_S = 15, COOLDOWN = 10000, P_THR = 0.5;
+const GATE_STD = 0.06, GATE_GYRO = 35, GATE_HOLD = 2000;
+const MED_FIRST = 30, MED_INTERVAL = 150, MED_TIMEOUT = 60, PERSIST = 30, TELEMETRY_S = 15;
+const MEDS = [["08:00", "Metformin 500 mg"], ["13:00", "Amlodipine 5 mg"], ["21:00", "Atorvastatin 20 mg"]];
+const STATES = ["IDLE", "FREE_FALL", "IMPACT", "POST_IMPACT", "INFERENCE", "COUNTDOWN", "COOLDOWN"];
+
+// ---------------------------------------------------------------- rng + vectors
+let seed = 0x1234567;
+const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return (seed >>> 8) / 16777216; };
+const gauss = (sd = 1) => sd * Math.sqrt(-2 * Math.log(rnd() + 1e-7)) * Math.cos(2 * Math.PI * rnd());
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const norm = a => Math.hypot(a[0], a[1], a[2]);
+const unit = a => { const n = norm(a); return n > 1e-6 ? mul(a, 1 / n) : [0, 0, 1]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const rotate = (v, k, th) => { const c = Math.cos(th), s = Math.sin(th); return add(add(mul(v, c), mul(cross(k, v), s)), mul(k, dot(k, v) * (1 - c))); };
+
+// ---------------------------------------------------------------- scenario (mirror of include/mock_sensors.h)
+const G_WRIST = unit([0.15, -0.25, 0.956]), G_LY1 = unit([0.92, 0.30, -0.25]), G_LY2 = unit([-0.35, 0.90, 0.26]);
+function mode(ct) {
+  if (ct < 15) return "REST"; if (ct < 40) return "WALK"; if (ct < 55) return "REST"; if (ct < 95) return "LYING";
+  if (ct < 110) return "WALK"; if (ct < 125) return "LYING"; if (ct < 140) return "GESTURE"; return "REST";
+}
+function physiology(ct) {
+  const p = { hr: 72 + 2 * Math.sin(ct / 20), spo2: 97.5, rr: 15 };
+  if ((ct >= 15 && ct < 40) || (ct >= 95 && ct < 110)) p.hr = 95;
+  if (ct >= 55 && ct < 115) p.hr += 33 * Math.exp(-(ct - 55) / 40);
+  if (ct >= 145 && ct < 195) { const r = Math.min(1, (ct - 145) / 6) * Math.min(1, (195 - ct) / 4); p.spo2 -= 10.5 * r; p.hr += 50 * r; p.rr += 10 * r; }
+  if (injected && sim.t - injected.t0 >= 0 && sim.t - injected.t0 < 60000) p.hr += 30 * Math.exp(-(sim.t - injected.t0) / 40000);
+  return p;
+}
+let injected = null;  // user-triggered fall {t0, g0, g1}
+
+function imuSample(t) {
+  const ts = t / 1000, ct = ts % CYCLE;
+  let m = mode(ct), a = [0, 0, 0], w = [0, 0, 0];
+  const inj = injected && t >= injected.t0 && t < injected.t0 + 30000;
+  if (inj && t >= injected.t0 + 600) m = "LYING_INJ";
+  if (m === "REST") a = G_WRIST.slice();
+  else if (m === "LYING") a = (ct < 110 ? G_LY1 : G_LY2).slice();
+  else if (m === "LYING_INJ") a = injected.g1.slice();
+  else if (m === "WALK") {
+    const f = 0.9, A = 0.45, axis = unit([1, 0.2, 0]);
+    const th = A * Math.sin(2 * Math.PI * f * ts), dth = A * 2 * Math.PI * f * Math.cos(2 * Math.PI * f * ts);
+    a = rotate(G_WRIST, axis, th);
+    let st = Math.sin(2 * Math.PI * 2 * f * ts); st = Math.sign(st) * Math.pow(Math.abs(st), 1.5) * 0.35;
+    a = add(a, mul([0.2, 0.9, 0.3], st)); w = mul(axis, dth * 57.2958);
+  } else if (m === "GESTURE") {
+    const axis = unit([0.3, 1, 0.2]);
+    const th = 0.8 * Math.sin(2 * Math.PI * 1.5 * ts) + 0.3 * Math.sin(2 * Math.PI * 0.4 * ts);
+    const dth = 0.8 * 2 * Math.PI * 1.5 * Math.cos(2 * Math.PI * 1.5 * ts) + 0.3 * 2 * Math.PI * 0.4 * Math.cos(2 * Math.PI * 0.4 * ts);
+    a = add(rotate(G_WRIST, axis, th), [gauss(0.12), gauss(0.12), gauss(0.12)]); w = mul(axis, dth * 57.2958);
+  }
+  const fall = (r, g0, g1) => {
+    const axis = unit(cross(g0, g1)), total = Math.acos(Math.max(-1, Math.min(1, dot(g0, g1))));
+    if (r < 0.35) { a = mul(rotate(g0, axis, (r / 0.35) * total), 0.2); w = mul(axis, total / 0.35 * 57.2958); }
+    else if (r < 0.47) { const d = r - 0.35; const s = d < 0.04 ? 4.5 - 10 * d : 1.5 * Math.exp(-30 * (d - 0.04)) * Math.cos(2 * Math.PI * 12 * (d - 0.04));
+      a = add(g1, mul(unit(add(g1, [0.4, -0.3, 0.5])), s)); w = [gauss(150), gauss(150), gauss(150)]; }
+    else a = g1.slice();
+  };
+  if (ct >= 35 && ct < 36.2) { const r = ct - 35, g = G_WRIST;
+    if (r < 0.25) a = mul(g, 0.75); else if (r < 0.45) a = mul(g, 1.8); else if (r < 0.75) a = mul(g, 0.12);
+    else if (r < 0.81) a = mul(g, 1 + 2.8 * (1 - (r - 0.75) / 0.06));
+    w = add(w, [gauss(40), gauss(40), gauss(40)]); }
+  if (ct >= 55 && ct < 55.6) fall(ct - 55, G_WRIST, G_LY1);
+  if (ct >= 110 && ct < 110.6) fall(ct - 110, G_WRIST, G_LY2);
+  if (ct >= 132 && ct < 132.08) a = add(a, mul(unit([0.1, 0.2, 1]), 4.2 * Math.exp(-4 * (ct - 132) / 0.08)));
+  if (inj && t < injected.t0 + 600) fall((t - injected.t0) / 1000, injected.g0, injected.g1);
+  a = add(a, [gauss(0.008), gauss(0.008), gauss(0.008)]);
+  w = add(w, [gauss(0.5), gauss(0.5), gauss(0.5)]);
+  return { a, w };
+}
+const physicallyMoving = t => { const m = mode((t / 1000) % CYCLE); return (m === "WALK" || m === "GESTURE") && !(injected && t >= injected.t0 && t < injected.t0 + 30000); };
+
+// ---------------------------------------------------------------- fall detector (port of src/drivers/fall_detector.cpp)
+const det = { state: "IDLE", ring: new Float32Array(WIN * 3), head: 0, win: new Float32Array(WIN * 3), ready: false,
+  tState: 0, tImpact: 0, tFf: 0, ffCount: 0, since: 0, viol: 0, stillN: 0, peak: 0, prob: -1, ffMs: 0,
+  stats: [], lastMotion: 0, gate: false, note: "armed" };
+function heuristic(w) {
+  const mag = i => Math.hypot(w[i * 3], w[i * 3 + 1], w[i * 3 + 2]);
+  let minPre = 9, peak = 0; const pre = [0, 0, 0], post = [0, 0, 0]; const pm = [];
+  for (let i = IMPACT_IDX - 30; i < IMPACT_IDX; i++) minPre = Math.min(minPre, mag(i));
+  for (let i = IMPACT_IDX - 5; i < IMPACT_IDX + 10; i++) peak = Math.max(peak, mag(i));
+  for (let i = 0; i < IMPACT_IDX - 30; i++) for (let k = 0; k < 3; k++) pre[k] += w[i * 3 + k];
+  for (let i = IMPACT_IDX + 25; i < WIN; i++) { for (let k = 0; k < 3; k++) post[k] += w[i * 3 + k]; pm.push(mag(i)); }
+  const mean = pm.reduce((s, x) => s + x, 0) / pm.length, sd = Math.sqrt(pm.reduce((s, x) => s + (x - mean) ** 2, 0) / pm.length);
+  const ang = Math.acos(Math.max(-1, Math.min(1, dot(pre, post) / (norm(pre) * norm(post) + 1e-6)))) * 57.2958;
+  const c = x => Math.max(0, Math.min(1, x));
+  return 0.25 * c((0.7 - minPre) / 0.4) + 0.25 * c((peak - 2) / 2) + 0.25 * c((0.15 - sd) / 0.1) + 0.25 * c(ang / 45);
+}
+function detUpdate(t, a, w, cancel) {
+  const out = { changed: false, countdown: false, confirmed: false, cancelled: false };
+  const enter = (s, note) => { det.state = s; det.tState = t; det.note = note; out.changed = true; };
+  det.ring.set(a, det.head * 3); det.head = (det.head + 1) % WIN;
+  const mag = norm(a), gmag = norm(w);
+  det.stats.push(mag); if (det.stats.length > HZ) det.stats.shift();
+  const m = det.stats.reduce((s, x) => s + x, 0) / det.stats.length;
+  const sd = Math.sqrt(det.stats.reduce((s, x) => s + (x - m) ** 2, 0) / det.stats.length);
+  if (sd > GATE_STD || gmag > GATE_GYRO) det.lastMotion = t || 1;
+  det.gate = det.lastMotion > 0 && t - det.lastMotion < GATE_HOLD;
+  const snap = () => { for (let i = 0; i < WIN; i++) { const j = ((det.head + i) % WIN) * 3; det.win[i * 3] = det.ring[j]; det.win[i * 3 + 1] = det.ring[j + 1]; det.win[i * 3 + 2] = det.ring[j + 2]; } det.ready = true; };
+  switch (det.state) {
+    case "IDLE":
+      if (mag < FF_G) { if (det.ffCount === 0) det.tFf = t; if (++det.ffCount >= FF_MIN) enter("FREE_FALL", "free fall detected (|a| < 0.5 g)"); } else det.ffCount = 0; break;
+    case "FREE_FALL":
+      if (mag > IMPACT_G) { det.tImpact = t; det.peak = mag; det.ffMs = t - det.tFf; det.since = 0; det.ready = false; enter("IMPACT", `impact ${mag.toFixed(1)} g after ${det.ffMs} ms of free fall`); }
+      else if (t - det.tFf > IMPACT_WIN) { det.ffCount = 0; enter("IDLE", "free fall without impact"); } break;
+    case "IMPACT":
+      det.since++; det.peak = Math.max(det.peak, mag); if (det.since === WIN - 1 - IMPACT_IDX) snap();
+      if (t - det.tImpact >= SETTLE) { det.viol = 0; det.stillN = 0; enter("POST_IMPACT", "checking 2.5 s of post-impact stillness"); } break;
+    case "POST_IMPACT": {
+      det.since++; if (det.since === WIN - 1 - IMPACT_IDX) snap();
+      det.stillN++; if (Math.abs(mag - 1) > STILL_DEV || gmag > STILL_GYRO) det.viol++;
+      if (det.viol > Math.max(3, Math.floor(det.stillN / 10))) { det.ffCount = 0; enter("IDLE", "movement after impact: wearer recovered (e.g. a jump)"); }
+      else if (t - det.tImpact >= SETTLE + STILL && det.ready) {
+        det.prob = heuristic(det.win);
+        if (det.prob >= P_THR) { enter("COUNTDOWN", `score ${det.prob.toFixed(2)} ≥ 0.5: ${COUNTDOWN_S} s countdown, press A to cancel`); out.countdown = true; }
+        else { det.ffCount = 0; enter("IDLE", `score ${det.prob.toFixed(2)} < 0.5: rejected as daily activity`); }
+      } break; }
+    case "COUNTDOWN":
+      if (cancel) { out.cancelled = true; enter("COOLDOWN", "cancelled by wearer"); }
+      else if (t - det.tState >= COUNTDOWN_S * 1000) { out.confirmed = true; enter("COOLDOWN", "no response: FALL alert sent"); } break;
+    case "COOLDOWN":
+      if (t - det.tState >= COOLDOWN) { det.ffCount = 0; enter("IDLE", "re-armed"); } break;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- simulation state
+const sim = { t: 0, speed: 1, btnA: false, btnB: false, btnLong: false, accHist: [], trend: [], vit: { hr: NaN, spo2: NaN, rr: NaN, gated: false },
+  abn: { hr: 0, spo2: 0, rr: 0 }, latched: false, med: null, medCount: 0, battV: 4.15, sent: 0, lastTele: -1, alarm: null, wifiUntil: 0, events: [], nextId: 1 };
+const fmtT = ms => { const s = Math.floor(ms / 1000); return `T+${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+const wall = ms => { const d = new Date(bootWall + ms); return d.toTimeString().slice(0, 8); };
+const bootWall = Date.now() - 48000;
+
+const META = { FALL: ["Fall detected", "crit"], SOS: ["SOS button", "crit"], MED_MISSED: ["Medication missed", "crit"], VITALS_ABNORMAL: ["Abnormal vitals", "crit"],
+  FALL_CANCELLED: ["Fall cancelled by wearer", "ok"], MED_TAKEN: ["Medication taken", "ok"], MED_REMINDER: ["Medication reminder", "info"], LOW_BATTERY: ["Low battery", "warn"], BOOT: ["Device boot", "info"] };
+function raise(type, detail, extra = {}) {
+  const v = sim.vit;
+  sim.events.unshift({ id: sim.nextId++, t: sim.t, type, detail, hr: v.hr, spo2: v.spo2, rr: v.rr, acked: false, ...extra });
+  if (sim.events.length > 60) sim.events.pop();
+  sim.sent++; sim.wifiUntil = sim.t + 1800; logDirty = true;
+}
+
+// buttons scripted by the scenario (same as Scenario::buttons in mock_sensors.h)
+function scriptedButtons(prev, now) {
+  const crossed = at => { const a = prev / 1000, b = now / 1000, base = Math.floor(b / CYCLE) * CYCLE;
+    for (let c = 0; c < 2; c++) { const x = base - c * CYCLE + at; if (x > a && x <= b) return true; } return false; };
+  if (crossed(120)) sim.btnA = true;
+  if (crossed(225)) sim.btnLong = true;
+  const a = prev / 1000, b = now / 1000;
+  for (let k = 0; k < 1000; k += 2) { const x = MED_FIRST + k * MED_INTERVAL + 20; if (x > b) break; if (x > a) sim.btnB = true; }
+}
+
+function step() {
+  const prev = sim.t; sim.t += DT; const t = sim.t;
+  scriptedButtons(prev, t);
+  // motion task
+  let cancel = false;
+  if (det.state === "COUNTDOWN" && (sim.btnA || sim.btnB)) { cancel = true; sim.btnA = sim.btnB = false; }
+  const s = imuSample(t);
+  const o = detUpdate(t, s.a, s.w, cancel);
+  sim.accHist.push(norm(s.a)); if (sim.accHist.length > 500) sim.accHist.shift();
+  if (o.countdown) { sim.btnA = false; sim.alarm = "FALL"; }
+  if (o.confirmed) { sim.alarm = null; raise("FALL", `free fall ${det.ffMs} ms, impact ${det.peak.toFixed(1)} g, no response`, { prob: det.prob, peak: det.peak }); }
+  if (o.cancelled) { sim.alarm = null; raise("FALL_CANCELLED", `free fall ${det.ffMs} ms, impact ${det.peak.toFixed(1)} g`, { prob: det.prob, peak: det.peak }); }
+  // supervisor: SOS
+  if (sim.btnLong) { sim.btnLong = false; raise("SOS", "SOS button held 2 s"); sim.sosFlash = t + 1000; }
+  if (det.state !== "COUNTDOWN" && !sim.med) sim.btnA = false;
+  // once per second: vitals, reminders, telemetry
+  if (t % 1000 === 0) secondTick(t);
+}
+
+const ema = (old, x, k) => (Number.isFinite(old) ? old + k * (x - old) : x);
+function secondTick(t) {
+  const ct = (t / 1000) % CYCLE, p = physiology(ct), v = sim.vit;
+  v.gated = det.gate || physicallyMoving(t);
+  if (!v.gated) {
+    v.hr = ema(v.hr, p.hr + gauss(1.2), 0.35); v.spo2 = Math.min(100, ema(v.spo2, p.spo2 + gauss(0.25), 0.3)); v.rr = ema(v.rr, p.rr + gauss(0.4), 0.25);
+    const upd = (k, abn) => { sim.abn[k] = abn ? sim.abn[k] + 1 : 0; };
+    upd("hr", v.hr < 40 || v.hr > 130); upd("spo2", v.spo2 < 90); upd("rr", v.rr < 8 || v.rr > 28);
+    const worst = ["spo2", "hr", "rr"].find(k => sim.abn[k] >= PERSIST);
+    if (worst && !sim.latched) { sim.latched = true; raise("VITALS_ABNORMAL", `${{ spo2: "SpO₂", hr: "HR", rr: "RR" }[worst]} abnormal for ${PERSIST} s`); }
+    else if (sim.latched && !sim.abn.hr && !sim.abn.spo2 && !sim.abn.rr) sim.latched = false;
+  }
+  sim.battV = Math.max(3.35, 4.15 - 0.00002 * t / 1000 + gauss(0.002));
+  // medication (accelerated schedule)
+  const ts = t / 1000;
+  if (ts >= MED_FIRST && (ts - MED_FIRST) % MED_INTERVAL === 0) {
+    if (sim.med) raise("MED_MISSED", `${sim.med.name} not confirmed`);
+    const m = MEDS[sim.medCount++ % MEDS.length];
+    sim.med = { t, name: `${m[0]} ${m[1]}` }; sim.btnB = false; raise("MED_REMINDER", `${sim.med.name}: press B to confirm`);
+  }
+  // telemetry heartbeat
+  if (sim.lastTele < 0 || t - sim.lastTele >= TELEMETRY_S * 1000) { sim.lastTele = t; sim.sent++; sim.wifiUntil = t + 1200; }
+  sim.trend.push({ t, hr: v.gated ? NaN : v.hr, spo2: v.gated ? NaN : v.spo2, rr: v.gated ? NaN : v.rr });
+  if (sim.trend.length > 300) sim.trend.shift();
+}
+function medTick() {
+  if (!sim.med) return;
+  if (sim.btnB) { sim.btnB = false; raise("MED_TAKEN", `${sim.med.name.slice(6)} confirmed after ${Math.round((sim.t - sim.med.t) / 1000)} s`); sim.med = null; }
+  else if (sim.t - sim.med.t >= MED_TIMEOUT * 1000) { raise("MED_MISSED", `${sim.med.name} not confirmed within ${MED_TIMEOUT} s`); sim.med = null; }
+}
+
+// ---------------------------------------------------------------- rendering
+const $ = id => document.getElementById(id);
+let logDirty = true;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(r.width * d) || c.height !== Math.round(r.height * d)) { c.width = Math.round(r.width * d); c.height = Math.round(r.height * d); }
+  const ctx = c.getContext("2d"); ctx.setTransform(d, 0, 0, d, 0, 0); return [ctx, r.width, r.height];
+}
+function drawSeries(c, data, lo, hi, color, ticks, unit) {
+  const [ctx, W, H] = fitCanvas(c); const padL = 30, padB = 4, padT = 6;
+  ctx.clearRect(0, 0, W, H); ctx.font = `10px ${css("--f-num")}`; ctx.textBaseline = "middle";
+  const y = v => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
+  ctx.strokeStyle = css("--grid"); ctx.fillStyle = css("--muted"); ctx.lineWidth = 1;
+  for (const tk of ticks) { ctx.beginPath(); ctx.moveTo(padL, y(tk)); ctx.lineTo(W, y(tk)); ctx.stroke(); ctx.fillText(String(tk), 2, y(tk)); }
+  const n = 120; data = data.slice(-n); const x = i => padL + (W - padL) * (i + n - data.length) / (n - 1);
+  ctx.fillStyle = color + "22"; ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+  let seg = [];
+  const flush = () => { if (seg.length > 1) {
+    ctx.beginPath(); seg.forEach(([i, v], k) => k ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x(seg[0][0]), H - padB); seg.forEach(([i, v]) => ctx.lineTo(x(i), y(Math.max(lo, Math.min(hi, v))))); ctx.lineTo(x(seg[seg.length - 1][0]), H - padB); ctx.fill(); }
+    seg = []; };
+  data.forEach((v, i) => { if (Number.isFinite(v)) seg.push([i, Math.max(lo, Math.min(hi, v))]); else flush(); }); flush();
+  const lastI = data.length - 1;
+  if (lastI >= 0 && Number.isFinite(data[lastI])) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x(lastI), y(Math.max(lo, Math.min(hi, data[lastI]))), 3, 0, 7); ctx.fill(); }
+}
+function drawAcc() {
+  const [ctx, W, H] = fitCanvas($("cAcc")); const padL = 30, lo = 0, hi = 6;
+  ctx.clearRect(0, 0, W, H); ctx.font = `10px ${css("--f-num")}`; ctx.textBaseline = "middle";
+  const y = v => 6 + (H - 12) * (1 - (Math.min(hi, v) - lo) / (hi - lo));
+  ctx.strokeStyle = css("--grid"); ctx.fillStyle = css("--muted");
+  for (const tk of [0, 1, 2, 3, 4, 5, 6]) { ctx.beginPath(); ctx.moveTo(padL, y(tk)); ctx.lineTo(W, y(tk)); ctx.stroke(); ctx.fillText(tk + "", 4, y(tk)); }
+  ctx.setLineDash([5, 4]); ctx.lineWidth = 1.2;
+  ctx.strokeStyle = css("--warn"); ctx.beginPath(); ctx.moveTo(padL, y(FF_G)); ctx.lineTo(W, y(FF_G)); ctx.stroke();
+  ctx.strokeStyle = css("--crit"); ctx.beginPath(); ctx.moveTo(padL, y(IMPACT_G)); ctx.lineTo(W, y(IMPACT_G)); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle = css("--crit"); ctx.textAlign = "right"; ctx.fillText("impact 2.7 g", W - 4, y(IMPACT_G) - 8);
+  ctx.fillStyle = css("--warn"); ctx.fillText("free fall 0.5 g", W - 4, y(FF_G) - 8); ctx.textAlign = "left";
+  const d = sim.accHist, n = 500, x = i => padL + (W - padL) * (i + n - d.length) / (n - 1);
+  ctx.strokeStyle = css("--trace"); ctx.lineWidth = 1.5; ctx.beginPath();
+  d.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))); ctx.stroke();
+}
+
+function buildTimeline() {
+  const tl = $("timeline"), segs = [[0, 15, "ok"], [15, 40, "warn"], [40, 55, "ok"], [55, 95, "ly"], [95, 110, "warn"], [110, 125, "ly"], [125, 140, "warn"], [140, 145, "ok"], [145, 195, "crit"], [195, 240, "ok"]];
+  const col = { ok: "var(--ok-soft)", warn: "var(--warn-soft)", ly: "var(--surface)", crit: "var(--crit-soft)" };
+  for (const [a, b, k] of segs) { const e = document.createElement("div"); e.className = "seg-b"; e.style.left = (a / CYCLE * 100) + "%"; e.style.width = ((b - a) / CYCLE * 100) + "%"; e.style.background = col[k]; tl.prepend(e); }
+  const marks = [[35, "jump"], [55, "fall"], [110, "fall"], [132, "slap"], [225, "SOS"]];
+  for (const [a, label] of marks) { const e = document.createElement("div"); e.className = "seg-b"; e.style.left = (a / CYCLE * 100) + "%"; e.style.width = "2px"; e.style.background = "var(--muted)"; e.title = label; tl.prepend(e); }
+}
+function buildFsm() { $("fsm").innerHTML = STATES.map(s => `<span id="st-${s}">${s}</span>`).join(""); }
+
+const fmt = (v, d) => Number.isFinite(v) ? v.toFixed(d) : "--";
+function render() {
+  const t = sim.t, v = sim.vit;
+  $("clock").textContent = fmtT(t);
+  $("hr").textContent = fmt(v.hr, 0); $("spo2").textContent = fmt(v.spo2, 1); $("rr").textContent = fmt(v.rr, 0);
+  $("bv").textContent = sim.battV.toFixed(2); const pct = Math.round(Math.max(0, Math.min(100, (sim.battV - 3.3) / 0.9 * 100))); $("bpct").textContent = pct + " %";
+  for (const [id, k] of [["vHr", "hr"], ["vSpo2", "spo2"], ["vRr", "rr"]]) { $(id).classList.toggle("stale", v.gated); $(id).classList.toggle("alarm", !v.gated && sim.abn[k] > 0); }
+  const tr = sim.trend;
+  drawSeries($("cHr"), tr.map(r => r.hr), 40, 160, css("--hr"), [60, 100, 140]);
+  drawSeries($("cSpo2"), tr.map(r => r.spo2), 84, 100, css("--spo2"), [85, 90, 95, 100]);
+  drawSeries($("cRr"), tr.map(r => r.rr), 5, 35, css("--rr"), [10, 20, 30]);
+  drawAcc();
+  $("accNow").textContent = (sim.accHist.at(-1) ?? 0).toFixed(2) + " g";
+  STATES.forEach(s => { const e = $("st-" + s); const on = det.state === s; e.className = on ? (["COUNTDOWN", "IMPACT", "FREE_FALL"].includes(s) ? "on hot" : "on") : ""; });
+  const cd = det.state === "COUNTDOWN" ? Math.max(0, COUNTDOWN_S - Math.floor((t - det.tState) / 1000)) : null;
+  $("fsmNote").textContent = det.note + (cd !== null ? `  (${cd} s left)` : "");
+  $("kvState").textContent = det.state; $("kvProb").textContent = det.prob >= 0 ? det.prob.toFixed(2) : "--"; $("kvGate").textContent = v.gated ? "on (PPG frozen)" : "off";
+  const nextDose = MED_FIRST + Math.ceil(Math.max(0, t / 1000 - MED_FIRST + 0.001) / MED_INTERVAL) * MED_INTERVAL;
+  $("kvDose").textContent = sim.med ? "waiting for button B" : `in ${Math.round(nextDose - t / 1000)} s`;
+  $("kvSent").textContent = sim.sent;
+  $("cursor").style.left = `calc(${((t / 1000) % CYCLE) / CYCLE * 100}% - 1px)`;
+  $("cycleLbl").textContent = `cycle ${Math.floor(t / 1000 / CYCLE) + 1} · ${Math.floor((t / 1000) % CYCLE)} / 240 s`;
+  // device
+  $("oTime").textContent = wall(t).slice(0, 5); $("oBatt").textContent = pct + "%"; $("oHr").innerHTML = fmt(v.hr, 0) + "<small>bpm</small>"; $("oSpo").textContent = "SpO₂ " + fmt(v.spo2, 0);
+  let msg = "all good", hot = false;
+  if (det.state === "COUNTDOWN") { msg = `FALL? press A (${cd}s)`; hot = true; }
+  else if (sim.sosFlash && t < sim.sosFlash + 2000) { msg = "SOS sent"; hot = true; }
+  else if (sim.med) msg = "take meds: press B";
+  else if (sim.latched) { msg = "vitals abnormal"; hot = true; }
+  else if (v.gated) msg = "moving: PPG paused";
+  $("oMsg").textContent = msg; $("oMsg").className = "msg" + (hot ? " hot" : "");
+  const buzzing = det.state === "COUNTDOWN" || (sim.med && (t - sim.med.t) < 20000) || (sim.sosFlash && t < sim.sosFlash + 1000);
+  $("band").classList.toggle("buzz", !!buzzing);
+  $("outBuzz").classList.toggle("on", !!buzzing); $("outVib").classList.toggle("on", !!buzzing);
+  const wifi = t < sim.wifiUntil; $("outWifi").classList.toggle("on", wifi); $("outWifi").textContent = wifi ? "WiFi on: POST" : "WiFi off";
+  // banner
+  const open = sim.events.filter(e => META[e.type][1] === "crit" && !e.acked);
+  const b = $("banner");
+  if (open.length) { const e = open[0];
+    b.className = "banner crit"; $("bannerText").textContent = `${META[e.type][0].toUpperCase()}: WB-01 at ${wall(e.t)}${open.length > 1 ? ` (+${open.length - 1} more open)` : ""}`;
+    if (!$("bannerAck")) { const btn = document.createElement("button"); btn.id = "bannerAck"; btn.textContent = "Acknowledge"; btn.onclick = () => { open.forEach(x => x.acked = true); logDirty = true; render(); }; b.append(btn); }
+  } else if (det.state === "COUNTDOWN") { b.className = "banner warn"; $("bannerText").textContent = `Possible fall on WB-01: wearer has ${cd} s to cancel before the alert is sent`; $("bannerAck")?.remove(); }
+  else { b.className = "banner ok"; $("bannerText").textContent = `WB-01 OK · ${v.gated ? "wearer moving, PPG paused" : "at rest"} · last update ${Math.min(TELEMETRY_S, Math.round((t - sim.lastTele) / 1000))} s ago`; $("bannerAck")?.remove(); }
+  if (logDirty) renderLog();
+}
+function renderLog() {
+  logDirty = false;
+  $("log").innerHTML = sim.events.map(e => {
+    const [label, cls] = META[e.type];
+    const vit = [Number.isFinite(e.hr) ? `HR ${e.hr.toFixed(0)}` : "", Number.isFinite(e.spo2) ? `SpO₂ ${e.spo2.toFixed(1)}` : "", Number.isFinite(e.rr) ? `RR ${e.rr.toFixed(0)}` : ""].filter(Boolean).join(" · ");
+    const extra = e.prob !== undefined ? ` · score ${e.prob.toFixed(2)} · peak ${e.peak.toFixed(1)} g` : "";
+    const state = cls === "crit" ? (e.acked ? `<span class="pill info">ACK</span>` : `<span class="pill crit">OPEN</span>`) : `<span class="pill ${cls}">${cls === "ok" ? "OK" : "INFO"}</span>`;
+    return `<tr class="${cls} ${e.acked ? "acked" : "open"}"><td class="when">${wall(e.t)}<br>${fmtT(e.t)}</td><td><b>${label}</b> ${state}</td><td class="num">${vit}${extra}</td><td class="detail">${e.detail}</td>` +
+      `<td>${cls === "crit" && !e.acked ? `<button class="ack" data-id="${e.id}">Ack</button>` : ""}</td></tr>`;
+  }).join("");
+}
+$("log").addEventListener("click", ev => { const id = ev.target?.dataset?.id; if (!id) return; const e = sim.events.find(x => x.id === +id); if (e) { e.acked = true; logDirty = true; render(); } });
+$("ackAll").onclick = () => { sim.events.forEach(e => e.acked = true); logDirty = true; render(); };
+
+// ---------------------------------------------------------------- controls
+const pressA = () => { sim.btnA = true; };
+const pressB = () => { sim.btnB = true; };
+$("bA").onclick = pressA; $("hwA").onclick = pressA; $("bB").onclick = pressB; $("hwB").onclick = pressB;
+$("bSos").onclick = () => { sim.btnLong = true; };
+$("bFall").onclick = () => {
+  const g0 = unit(imuSample(sim.t).a); injected = { t0: sim.t + 100, g0: norm(g0) > 0 ? g0 : G_WRIST, g1: unit([0.2 + rnd() * 0.6, -0.9, 0.3]) };
+};
+for (const r of document.querySelectorAll('input[name="spd"]')) r.addEventListener("change", () => { sim.speed = +r.value; });
+
+// ---------------------------------------------------------------- boot: fast-forward 48 s so the page opens mid-scenario
+buildTimeline(); buildFsm();
+raise("BOOT", "fw 1.0.0, IMU=sim PPG=sim RTC=sim EEPROM=sim");
+while (sim.t < 48000) { step(); if (sim.t % 1000 === 0) medTick(); }
+render();
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(250, now - last) * sim.speed; last = now;
+  while (acc >= DT) { step(); if (sim.t % 1000 === 0) medTick(); acc -= DT; }
+  render(); requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
