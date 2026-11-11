@@ -564,5 +564,13 @@ title_slide("Thank you", [("Questions are welcome.", 15, False, PALE),
                           ("Code: github.com/f20230104-dotcom/Vital-armband", 13, False, WHITE)],
             "Thank you. The live demo and all code are online.", heading_size=36, lines_y=330)
 
+# speaker notes: three-person script (docs/presentation/speaker_script.py)
+import sys as _sys
+_sys.path.insert(0, str(HERE))
+from speaker_script import SCRIPT  # noqa: E402
+assert len(SCRIPT) == len(prs.slides), "one script entry per slide"
+for _slide, (_who, _secs, _words) in zip(prs.slides, SCRIPT):
+    notes(_slide, f"SPEAKER {_who} · about {_secs} s\n\n{_words}")
+
 prs.save(OUT)
 print(f"wrote {OUT} ({len(prs.slides)} slides)")
