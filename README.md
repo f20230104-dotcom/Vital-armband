@@ -102,7 +102,7 @@ python ml_training/trigger_analysis.py          # trigger recall study -> result
 * **Firmware simulation:** 80 simulated minutes: 20/20 falls, 0/40 false alerts from jumps and table slaps; vital-sign
   MAE HR 3.4 bpm, SpO₂ 1.1 %, RR 2.4 /min.
 
-Presentation (BITS template, 34 slides): [`docs/Vital_Wristband_BITS_F312.pptx`](docs/Vital_Wristband_BITS_F312.pptx),
+Presentation (BITS template, 14 slides: 1–2 per section): [`docs/Vital_Wristband_BITS_F312.pptx`](docs/Vital_Wristband_BITS_F312.pptx),
 rebuilt from the results by `python docs/presentation/build_presentation.py`.
 
 ## 2. Dashboard
