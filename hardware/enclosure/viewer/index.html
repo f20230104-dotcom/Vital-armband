@@ -106,7 +106,7 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
 <div class="app">
   <header>
     <h1>Wrist Pod Assembly</h1>
-    <p>Every component of the Vital wristband, placed where it goes inside the printed case: the compact XIAO pod and the original DevKit pod.</p>
+    <p>Every component of the Vital wristband, placed where it goes inside the case: the compact XIAO pod, the custom-PCB concept and the original DevKit pod.</p>
     <div class="dims" id="dims"></div>
   </header>
   <main>
@@ -136,8 +136,9 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
         <h2>Display</h2>
         <div class="row"><span>Version</span>
           <div class="seg" id="version">
-            <button data-v="xiao" aria-pressed="true">Compact · XIAO</button>
-            <button data-v="devkit" aria-pressed="false">Original · DevKit</button>
+            <button data-v="xiao" aria-pressed="true">XIAO</button>
+            <button data-v="pcb" aria-pressed="false">Custom PCB</button>
+            <button data-v="devkit" aria-pressed="false">DevKit</button>
           </div>
         </div>
         <div class="row"><span>Case</span>
@@ -174,7 +175,7 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
       <div class="foot">
         Geometry comes from <code id="srcfile">hardware/enclosure/make_case_xiao.py</code>. Module sizes are typical seller
         dimensions; measure yours and adjust the parameters. Wire routes are indicative, so follow the wiring diagram for the
-        actual connections.
+        actual connections. The custom-PCB version is a concept: its parts are datasheet sizes and the board is not laid out yet.
       </div>
     </aside>
   </main>
@@ -183,6 +184,7 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="case_meshes.js"></script>
+<script src="pcb_parts.js"></script>
 <script>
 (() => {
 // ------------------------------------------------------------------ case numbers (mm, from make_case.py)
@@ -277,7 +279,8 @@ const parts = [];
 let CUR = "devkit";                       // version the next part() / wire() call belongs to
 const LAYERS = {
   devkit: { lid: "Lid · top layer", mid: "Base · middle layer", bot: "Base · bottom layer" },
-  xiao:   { lid: "Lid · XIAO layer", mid: "Base · battery layer", bot: "Base · skin layer" } };
+  xiao:   { lid: "Lid · XIAO layer", mid: "Base · battery layer", bot: "Base · skin layer" },
+  pcb:    { lid: "Lid · battery", mid: "Board · top side", bot: "Board · skin side" } };
 function part(def, build) {
   const g = new THREE.Group(); const mats = [];
   const mat = (color, o = {}) => {
@@ -483,7 +486,7 @@ const btns = part({ id: "buttons", name: "Tactile buttons ×2", short: "Buttons"
 });
 
 // ------------------------------------------------------------------ wires (assembled view only)
-const wiresBy = { devkit: new THREE.Group(), xiao: new THREE.Group() }; Object.values(wiresBy).forEach(g => pod.add(g));
+const wiresBy = { devkit: new THREE.Group(), xiao: new THREE.Group(), pcb: new THREE.Group() }; Object.values(wiresBy).forEach(g => pod.add(g));
 const WC = { red: 0xd23a2c, black: 0x202020, blue: 0x2f6fd6, yellow: 0xe6b81f, green: 0x2f9e57, white: 0xe8e8e8, orange: 0xf08a24 };
 function wire(color, pts) {
   const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, "centripetal");
@@ -674,17 +677,29 @@ wire("green", [[6.5, 6.4, 13.2], [2, 5.5, 13.4], [-6, 4.6, 13.8], [-11.5, 3.6, 1
 wire("white", [[14.5, 6.4, 13.2], [6, -1, 12.6], [-2, -9, 12.6], [-6.42, -12.9, 13.4]]);
 wire("white", [[16.3, 12.4, 3.8], [11, 14.3, 6], [-6, 14.3, 10.5], [-16, 11, 12.6], [-19.12, 3.6, 13.9]]);
 
+// ================================================================== concept: one custom PCB (make_case_pcb.py)
+// Parts come from pcb_parts.js (solids exported by the script, so the viewer and the fit check match).
+CUR = "pcb";
+(window.PCB_PARTS || []).forEach(d => part(d, (g, mat) => d.pieces.forEach(pc => {
+  const bin = atob(pc.stl), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  g.add(new THREE.Mesh(parseSTL(bytes.buffer), mat(pc.color, { m: pc.metal, r: pc.metal ? 0.35 : 0.6 })));
+})));
+
 // ------------------------------------------------------------------ case (STL) + wrist + strap
 const VARIANTS = {
   xiao:   { dims: ["48 × 34 × 19.4 mm", "46.4 mm across wrist", "22 mm strap"], lidEx: 48, barY: 21.7, strapT0: 30,
             stack: [["Floor", 1.8, "#6c7f96"], ["Sensors", 4, "#5b2c86"], ["Foam", 0.5, "#bdb6a2"], ["Battery", 6, "#8d9bab"], ["Top layer", 5.5, "#2b3038"], ["Lid", 1.6, "#9a6a1e"]],
             total: "19.4 mm", src: "make_case_xiao.py" },
+  pcb:    { dims: ["43 × 33 × 10.3 mm (concept)", "43.6 mm across wrist", "22 mm strap"], lidEx: 28, barY: 20.55, strapT0: 35,
+            stack: [["Floor + sensor", 1.4, "#6c7f96"], ["PCB", 1, "#1f5f3a"], ["Parts", 2.6, "#2b3038"], ["Battery", 4, "#8d9bab"], ["Gap", 0.1, "#bdb6a2"], ["Lid", 1.2, "#9a6a1e"]],
+            total: "10.3 mm", src: "make_case_pcb.py (concept)" },
   devkit: { dims: ["64 × 46 × 27.4 mm", "58.4 mm across wrist", "22 mm strap"], lidEx: 84, barY: 27.7, strapT0: 10,
             stack: [["Floor", 1.8, "#6c7f96"], ["Battery", 6, "#8d9bab"], ["Foam", 1, "#bdb6a2"], ["ESP32", 8, "#2a2e36"], ["Top layer", 9, "#1d4f9c"], ["Lid", 1.6, "#9a6a1e"]],
             total: "27.4 mm", src: "make_case.py (standard)" },
 };
 const caseMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0, side: THREE.DoubleSide });
-const caseParts = { devkit: {}, xiao: {} };
+const caseParts = { devkit: {}, xiao: {}, pcb: {} };
 function parseSTL(buf) {
   const dv = new DataView(buf), n = dv.getUint32(80, true), pos = new Float32Array(n * 9);
   for (let i = 0; i < n; i++) { const o = 84 + i * 50 + 12; for (let k = 0; k < 9; k++) pos[i * 9 + k] = dv.getFloat32(o + k * 4, true); }
@@ -692,7 +707,8 @@ function parseSTL(buf) {
 }
 async function loadCase() {
   if (!window.CASE_MESHES) throw new Error("case_meshes.js missing");
-  const defs = [["devkit", "base", "base"], ["devkit", "lid", "lid"], ["xiao", "base", "xbase"], ["xiao", "lid", "xlid"]];
+  const defs = [["devkit", "base", "base"], ["devkit", "lid", "lid"], ["xiao", "base", "xbase"], ["xiao", "lid", "xlid"],
+                ["pcb", "base", "pbase"], ["pcb", "lid", "plid"]];
   for (const [v, name, key] of defs) {
     if (!window.CASE_MESHES[key]) continue;
     const bin = atob(window.CASE_MESHES[key]), bytes = new Uint8Array(bin.length);
@@ -867,7 +883,7 @@ document.querySelectorAll("#views button").forEach(b => b.addEventListener("clic
 
 // picking
 const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const tip = $("tip");
-const pickBy = { devkit: [], xiao: [] }; parts.forEach(p => p.group.traverse(o => { if (o.isMesh) pickBy[p.v].push(o); }));
+const pickBy = { devkit: [], xiao: [], pcb: [] }; parts.forEach(p => p.group.traverse(o => { if (o.isMesh) pickBy[p.v].push(o); }));
 let downAt = null;
 function pick(ev) {
   const r = renderer.domElement.getBoundingClientRect();

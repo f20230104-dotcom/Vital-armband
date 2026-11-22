@@ -7,6 +7,7 @@ parameters at the top and re-run to resize.
 | Files | Pod | Size (L × W × H) | Across wrist (with strap bars) |
 |---|---|---|---|
 | `case_base_xiao.stl` + `case_lid_xiao.stl` | **Compact**: Seeed XIAO ESP32-S3, battery inside (`make_case_xiao.py`) | **48 × 34 × 19.4 mm** | 46.4 mm |
+| `case_base_pcb.stl` + `case_lid_pcb.stl` | *Concept* (future work): one custom PCB, LiPo 402530 (`make_case_pcb.py`) | 43 × 33 × 10.3 mm | 43.6 mm |
 | `case_base_standard.stl` + `case_lid_standard.stl` | Original: ESP32 DevKit + DS3231 + TP4056, battery inside (`make_case.py`) | 64 × 46 × 27.4 mm | 58.4 mm |
 | `case_base_slim.stl` + `case_lid_slim.stl` | Original, LiPo in a strap pocket | 64 × 46 × 20.4 mm | 58.4 mm |
 
@@ -53,6 +54,24 @@ Assembly:
    `IMU_AXIS_SIGN` and `TIME_ZONE` in `include/config.h`.
 
 The XIAO charges at about 100 mA (≈ 5 h for 500 mAh) and only with the power switch on.
+
+## Custom-PCB concept (future work)
+
+`python hardware/enclosure/make_case_pcb.py` models the phase-2 pod: every module replaced by one 39 × 29 × 1.0 mm
+PCB, giving **43 × 33 × 10.3 mm** (about half the thickness of the compact pod). It runs the same fit check (no
+overlaps) and writes `assembly_pcb.glb` plus the viewer's *Custom PCB* version.
+
+```
+ lid     LiPo 402530 (30 x 25 x 4 mm, ~180-200 mAh), clear of the antenna end; 3 sound holes over the buzzer
+ board   top: ESP32-S3-MINI-1 (antenna at the +X edge), BMI270 IMU, MCP73831 charger + load switch + LDO,
+              0825 coin motor, 5 x 5 mm buzzer, 2 side-push buttons (TPU plungers through the +Y wall)
+         skin side: MAXM86161 optical module flush in the floor window, 4 pogo pads (5 V, GND, USB D+/D-)
+ floor   1.4 mm with the sensor window and 4 pogo holes
+```
+
+Height: floor 1.4 + PCB 1.0 + parts 2.6 + battery 4.0 + gap 0.1 + lid 1.2 = 10.3 mm. A 3 mm cell gets it to about
+9 mm. Part sizes are datasheet values and the PCB is not laid out yet, so treat this as a target, not a design.
+The smaller cell needs the low-power firmware (deep sleep, WiFi only for alerts, wake-on-motion from the IMU).
 
 ## Original pod (ESP32 DevKit)
 

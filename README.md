@@ -47,7 +47,7 @@ alert log and a clickable wristband in the browser. The full Gradio dashboard (w
 | `dashboard/` | `server.py` (FastAPI webhook receiver + SQLite), `app.py` (Gradio UI), `device_simulator.py` |
 | `test/test_core/` | 15 Unity tests for DSP, vitals and the fall state machine (`pio test -e native`) |
 | `tools/host_sim.cpp` | Runs the firmware's sensing logic on a PC, faster than real time |
-| `hardware/enclosure/` | 3D-printable wrist pods: compact XIAO pod (48 × 34 × 19.4 mm) and original DevKit pod (64 × 46 × 27.4 mm); STLs, parametric scripts, 3D assembly viewer, print and assembly guide |
+| `hardware/enclosure/` | 3D-printable wrist pods: compact XIAO pod (48 × 34 × 19.4 mm), original DevKit pod (64 × 46 × 27.4 mm) and a custom-PCB concept (43 × 33 × 10.3 mm); STLs, parametric scripts, 3D assembly viewer, print and assembly guide |
 | `web_demo/` | Static in-browser command center deployed to the Hugging Face Space (`#t62` jumps to second 62) |
 | `docs/` | Presentation (`.pptx`), its build script, dashboard screenshots |
 
