@@ -1,8 +1,9 @@
 // =============================================================================
-// reminder_task.cpp - DS3231 medication alarms and confirmation countdown
+// reminder_task.cpp - medication alarms and confirmation countdown
 //
 // The DS3231 alarm 1 is armed for the next dose in MED_SCHEDULE; its INT pin (GPIO33)
-// fires at that time. The wristband beeps/vibrates and waits for button B. If the dose
+// fires at that time. Without a DS3231 (USE_DS3231 false) the HAL runs the same daily alarm
+// in software on the NTP-synced ESP32 clock. The wristband beeps/vibrates and waits for button B. If the dose
 // is not confirmed within MED_CONFIRM_TIMEOUT_S (5 min) a MED_MISSED alert is sent.
 // In SIMULATION_MODE the alarm comes from an accelerated schedule (hardware_hal.cpp).
 // =============================================================================
@@ -42,6 +43,7 @@ void reminderTask(void*) {
     bool pending = false, ringing = false;
     const Med* current = nullptr;
     uint32_t pendingSince = 0, lastNag = 0;
+    [[maybe_unused]] uint32_t lastRearmCheck = 0;
     char detail[64];
 
     wdtSubscribe();
@@ -72,6 +74,21 @@ void reminderTask(void*) {
             Serial.printf("[reminder] %s\n", detail);
             raiseAlert(EventType::MED_REMINDER, PRIO_LOW, detail);
         }
+
+#if !USE_DS3231
+        // The software clock can jump when NTP first syncs (it starts from the build time), so
+        // re-pick the next dose once a minute while nothing is pending.
+        if (!pending && !hal_isSimulated(Sensor::RTC) && millis() - lastRearmCheck > 60000) {
+            lastRearmCheck = millis();
+            const int idx = nextDoseIndex(hal_rtcNow());
+            if (idx != doseIdx) {
+                doseIdx = idx;
+                hal_rtcSetDailyAlarm(kMeds[doseIdx].hour, kMeds[doseIdx].minute);
+                Serial.printf("[reminder] clock changed, next dose %02u:%02u %s\n", kMeds[doseIdx].hour,
+                              kMeds[doseIdx].minute, kMeds[doseIdx].name);
+            }
+        }
+#endif
 
         if (!pending) continue;
         const uint32_t elapsed = millis() - pendingSince;

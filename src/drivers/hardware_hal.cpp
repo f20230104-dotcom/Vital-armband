@@ -9,6 +9,8 @@
 #include <MAX30105.h>
 #include <RTClib.h>
 #include <freertos/timers.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "config.h"
 #include "mock_sensors.h"
@@ -24,8 +26,12 @@ static RTC_DS3231 s_rtc;
 static sim::MockImu s_mockImu;
 static sim::MockPpg s_mockPpg((float)PPG_SAMPLE_HZ);
 static uint32_t s_simPpgLastMs = 0;
-static uint32_t s_unixAtBoot = 0;          // simulated RTC
+static uint32_t s_unixAtBoot = 0;          // simulated RTC / clock before the first NTP sync
 static volatile bool s_rtcIrq = false;
+static bool s_timeSynced = false;          // NTP has set the ESP32 clock (USE_DS3231 false)
+[[maybe_unused]] static uint32_t s_lastSyncMs = 0;
+static uint8_t s_alarmH = 0xFF, s_alarmM = 0;   // software daily alarm (USE_DS3231 false)
+static int32_t s_alarmLastDay = -1;
 
 // I2C guard ------------------------------------------------------------------------
 namespace {
@@ -36,7 +42,7 @@ struct I2cLock {
 };
 }
 
-static void IRAM_ATTR rtcIsr() { s_rtcIrq = true; }
+[[maybe_unused]] static void IRAM_ATTR rtcIsr() { s_rtcIrq = true; }
 
 [[maybe_unused]] static bool i2cPresent(uint8_t addr) {
     I2cLock l;
@@ -165,8 +171,15 @@ bool hal_init() {
                   ADDR_MPU6050, ADDR_MAX30102, ADDR_DS3231, ADDR_EEPROM);
     s_sim[(int)Sensor::IMU] = !(i2cPresent(ADDR_MPU6050) && initImu());
     s_sim[(int)Sensor::PPG] = !(i2cPresent(ADDR_MAX30102) && initPpg());
+#if USE_DS3231
     s_sim[(int)Sensor::RTC] = !(i2cPresent(ADDR_DS3231) && initRtc());
     s_sim[(int)Sensor::EEPROM] = !i2cPresent(ADDR_EEPROM);
+#else
+    s_sim[(int)Sensor::RTC] = false;       // ESP32 clock, NTP-synced in the telemetry window
+    s_sim[(int)Sensor::EEPROM] = true;     // no EEPROM without the RTC module (event log off)
+    setenv("TZ", TIME_ZONE, 1);
+    tzset();
+#endif
     if (!AUTO_FALLBACK_TO_MOCK && hal_anySimulated()) {
         Serial.printf("[hal] sensor missing and AUTO_FALLBACK_TO_MOCK=false: %s\n", hal_sensorSummary());
         return false;
@@ -180,14 +193,18 @@ bool hal_init() {
 bool hal_isSimulated(Sensor s) { return s_sim[(int)s]; }
 
 bool hal_anySimulated() {
-    for (bool s : s_sim) if (s) return true;
+    for (int i = 0; i < (int)Sensor::COUNT; ++i) {
+        if (!USE_DS3231 && i == (int)Sensor::EEPROM) continue;   // not fitted on the compact build
+        if (s_sim[i]) return true;
+    }
     return false;
 }
 
 const char* hal_sensorSummary() {
     snprintf(s_summary, sizeof(s_summary), "IMU=%s PPG=%s RTC=%s EEPROM=%s",
-             s_sim[0] ? "sim" : "real", s_sim[1] ? "sim" : "real", s_sim[2] ? "sim" : "real",
-             s_sim[3] ? "sim" : "real");
+             s_sim[0] ? "sim" : "real", s_sim[1] ? "sim" : "real",
+             s_sim[2] ? "sim" : (USE_DS3231 ? "real" : (s_timeSynced ? "ntp" : "ntp-unsynced")),
+             s_sim[3] ? (USE_DS3231 ? "sim" : "none") : "real");
     return s_summary;
 }
 
@@ -259,10 +276,52 @@ uint8_t hal_batteryPercent(float v) {
 }
 
 // ----------------------------------------------------------------------------- RTC
+// All times are "local wall-clock seconds" (local time encoded as if it were UTC), the same
+// convention the DS3231 uses, so formatting and the medication schedule need no time-zone math.
 uint32_t hal_rtcNow() {
     if (s_sim[(int)Sensor::RTC]) return s_unixAtBoot + millis() / 1000;
+#if USE_DS3231
     I2cLock l;
     return l.ok ? s_rtc.now().unixtime() : s_unixAtBoot + millis() / 1000;
+#else
+    if (!s_timeSynced) return s_unixAtBoot + millis() / 1000;
+    time_t t = time(nullptr);
+    struct tm lt;
+    localtime_r(&t, &lt);
+    return DateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec).unixtime();
+#endif
+}
+
+bool hal_timeSync() {
+#if SIMULATION_MODE
+    return false;
+#else
+    // Re-sync at most every 6 h; the ESP32 clock drifts only a few seconds per day.
+    if (s_timeSynced && millis() - s_lastSyncMs < 6UL * 3600UL * 1000UL) return true;
+    configTzTime(TIME_ZONE, NTP_SERVER_1, NTP_SERVER_2);
+    const uint32_t t0 = millis();
+    while (time(nullptr) < 1700000000 && millis() - t0 < NTP_SYNC_WAIT_MS) vTaskDelay(pdMS_TO_TICKS(100));
+    if (time(nullptr) < 1700000000) {
+        Serial.println("[hal] NTP sync failed");
+        return false;
+    }
+    s_timeSynced = true;
+    s_lastSyncMs = millis();
+    s_alarmLastDay = -1;                       // re-evaluate today's alarm against the corrected clock
+#if USE_DS3231
+    if (!s_sim[(int)Sensor::RTC]) {            // keep the DS3231 right as well
+        time_t t = time(nullptr);
+        struct tm lt;
+        localtime_r(&t, &lt);
+        I2cLock l;
+        if (l.ok) s_rtc.adjust(DateTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec));
+    }
+#endif
+    char ts[24];
+    hal_rtcFormat(hal_rtcNow(), ts, sizeof(ts));
+    Serial.printf("[hal] NTP time %s (%s)\n", ts, TIME_ZONE);
+    return true;
+#endif
 }
 
 void hal_rtcFormat(uint32_t unix, char* buf, size_t n) {
@@ -278,10 +337,21 @@ void hal_rtcHourMinute(uint32_t unix, uint8_t& hour, uint8_t& minute) {
 
 bool hal_rtcSetDailyAlarm(uint8_t hour, uint8_t minute) {
     if (s_sim[(int)Sensor::RTC]) return true;              // simulated schedule, see hal_rtcAlarmFired
+#if USE_DS3231
     I2cLock l;
     if (!l.ok) return false;
     s_rtc.clearAlarm(1);
     return s_rtc.setAlarm1(DateTime(2000, 1, 1, hour, minute, 0), DS3231_A1_Hour);   // match hh:mm:ss daily
+#else
+    s_alarmH = hour;
+    s_alarmM = minute;
+    // Do not fire for a time that has already passed today (e.g. armed at 08:00:30 for 08:00).
+    const uint32_t now = hal_rtcNow();
+    uint8_t h, m;
+    hal_rtcHourMinute(now, h, m);
+    s_alarmLastDay = (h * 60 + m >= hour * 60 + minute) ? (int32_t)(now / 86400) : -1;
+    return true;
+#endif
 }
 
 bool hal_rtcAlarmFired() {
@@ -292,11 +362,27 @@ bool hal_rtcAlarmFired() {
     return false;
 #else
     if (s_sim[(int)Sensor::RTC]) return false;
+#if USE_DS3231
     if (!s_rtcIrq) return false;
     s_rtcIrq = false;
     I2cLock l;
     if (l.ok && s_rtc.alarmFired(1)) { s_rtc.clearAlarm(1); return true; }
     return false;
+#else
+    // Software alarm: fires once per day when the clock reaches (or has just passed) hh:mm.
+    if (s_alarmH == 0xFF) return false;
+    const uint32_t now = hal_rtcNow();
+    const int32_t day = (int32_t)(now / 86400);
+    if (day == s_alarmLastDay) return false;
+    uint8_t h, m;
+    hal_rtcHourMinute(now, h, m);
+    const int nowMin = h * 60 + m, alarmMin = s_alarmH * 60 + s_alarmM;
+    if (nowMin >= alarmMin && nowMin < alarmMin + 10) {   // 10-minute grace for a late clock jump
+        s_alarmLastDay = day;
+        return true;
+    }
+    return false;
+#endif
 #endif
 }
 

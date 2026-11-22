@@ -31,7 +31,7 @@ alert log and a clickable wristband in the browser. The full Gradio dashboard (w
 
 | Path | What it is |
 |---|---|
-| `platformio.ini` | `esp32dev` (simulation, default), `esp32dev-hw` (real sensors), `esp32dev-logger` (raw wrist IMU logger), `native` (host unit tests) |
+| `platformio.ini` | `esp32dev` (simulation, default), `esp32dev-hw` (real sensors), `esp32dev-logger` (raw wrist IMU logger), `xiao-s3` / `xiao-s3-hw` / `xiao-s3-logger` (compact pod on a Seeed XIAO ESP32-S3), `native` (host unit tests) |
 | `include/config.h` | Pin map, I²C addresses, thresholds, task layout, WiFi/webhook |
 | `include/types.h` | Sample structs, `AlertMsg`, `VitalsSnapshot`, event-group bits, RTOS handles |
 | `include/fall_model_data.h` | **Generated** int8 TFLite flatbuffer (13.8 KB) + quant params + boot self-test vectors |
@@ -47,7 +47,7 @@ alert log and a clickable wristband in the browser. The full Gradio dashboard (w
 | `dashboard/` | `server.py` (FastAPI webhook receiver + SQLite), `app.py` (Gradio UI), `device_simulator.py` |
 | `test/test_core/` | 15 Unity tests for DSP, vitals and the fall state machine (`pio test -e native`) |
 | `tools/host_sim.cpp` | Runs the firmware's sensing logic on a PC, faster than real time |
-| `hardware/enclosure/` | 3D-printable wrist pod (STL, parametric script, print and assembly guide) |
+| `hardware/enclosure/` | 3D-printable wrist pods: compact XIAO pod (48 × 34 × 19.4 mm) and original DevKit pod (64 × 46 × 27.4 mm); STLs, parametric scripts, 3D assembly viewer, print and assembly guide |
 | `web_demo/` | Static in-browser command center deployed to the Hugging Face Space (`#t62` jumps to second 62) |
 | `docs/` | Presentation (`.pptx`), its build script, dashboard screenshots |
 
@@ -160,18 +160,23 @@ pio run -e esp32dev -t upload && pio device monitor
   `python ml_training/record_wrist_data.py --port <port> --subject W01 --activity F01 --seconds 15`
   (falls only by healthy volunteers onto crash mats).
 
+* **Compact build (Seeed XIAO ESP32-S3):** `pio run -e xiao-s3-hw -t upload`. Same firmware with the XIAO pin map,
+  no DS3231 and no TP4056 (the XIAO charges the LiPo). The ESP32 clock is set by NTP at every WiFi window and the
+  medication alarm runs in software; set your time zone with `TIME_ZONE` in `include/config.h` or `secrets.h`
+  (default `IST-5:30`). Until the first sync the clock starts from the firmware build time.
+
 ### Pin map
 
-| Function | GPIO | I²C addr |
-|---|---|---|
-| I²C SDA / SCL | 21 / 22 | |
-| MPU6050 INT | 27 | 0x69 (AD0 high) |
-| DS3231 INT/SQW | 33 | 0x68, AT24C32 EEPROM 0x50 (A0–A2 bridged; default 0x57 clashes with the MAX30102) |
-| MAX30102 INT | 32 | 0x57 |
-| Button A (cancel / SOS long-press) | 4 | |
-| Button B (confirm medication) | 13 | |
-| Buzzer / vibration motor | 25 / 26 | |
-| Battery ADC (100k/100k divider) | 34 | |
+| Function | DevKit GPIO | XIAO pad (GPIO) | I²C addr |
+|---|---|---|---|
+| I²C SDA / SCL | 21 / 22 | D4 / D5 (5 / 6) | |
+| MPU6050 INT | 27 | D1 (2) | 0x69 (AD0 high) |
+| DS3231 INT/SQW | 33 | not fitted (NTP time) | 0x68, AT24C32 EEPROM 0x50 (A0–A2 bridged; default 0x57 clashes with the MAX30102) |
+| MAX30102 INT | 32 | D2 (3) | 0x57 |
+| Button A (cancel / SOS long-press) | 4 | D3 (4) | |
+| Button B (confirm medication) | 13 | D8 (7) | |
+| Buzzer / vibration motor | 25 / 26 | D9 / D10 (8 / 9) | |
+| Battery ADC (100k/100k divider) | 34 | D0 (1) | |
 
 ### RTOS layout
 
@@ -179,7 +184,7 @@ pio run -e esp32dev -t upload && pio device monitor
 |---|---|---|---|---|
 | motion | 1 | 5 | 20 ms | fall FSM, TFLM inference (~ms), owns `EVT_MOTION_ACTIVE` |
 | vitals | 1 | 4 | 40 ms | drains MAX30102 FIFO, 1 s estimates → mailbox queue |
-| reminder | 0 | 3 | 250 ms | DS3231 alarm 1 via INT pin, nag/confirm/timeout |
+| reminder | 0 | 3 | 250 ms | DS3231 alarm 1 via INT pin (or the NTP-synced software alarm), nag/confirm/timeout |
 | alert | 0 | 2 | event | queue set (HIGH first), WiFi on → POST → WiFi off, retry buffer |
 | loop | 1 | 1 | 20 ms | buttons, SOS, battery, stack/heap stats |
 

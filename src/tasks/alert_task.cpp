@@ -42,6 +42,7 @@ bool wifiUp() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("[alert] WiFi up in %lu ms, IP %s, RSSI %d\n", (unsigned long)(millis() - t0),
                       WiFi.localIP().toString().c_str(), WiFi.RSSI());
+        hal_timeSync();                        // keeps the medication clock right (no-op if synced < 6 h ago)
         return true;
     }
     Serial.println("[alert] WiFi connect timeout");

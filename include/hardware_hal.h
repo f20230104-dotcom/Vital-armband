@@ -33,6 +33,7 @@ void     hal_rtcFormat(uint32_t unix, char* buf, size_t n);   // ISO-8601 "YYYY-
 void     hal_rtcHourMinute(uint32_t unix, uint8_t& hour, uint8_t& minute);
 bool     hal_rtcSetDailyAlarm(uint8_t hour, uint8_t minute);
 bool     hal_rtcAlarmFired();                   // true once per alarm (clears it)
+bool     hal_timeSync();                        // NTP -> clock (call with WiFi up); false if it failed
 
 // ---- buttons / annunciator -----------------------------------------------------
 void  hal_pollButtons();                        // call every ~20 ms; sets EVT_BTN_* bits

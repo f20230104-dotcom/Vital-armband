@@ -13,7 +13,7 @@
 // true  : all sensors are replaced by realistic generators (mock_sensors.h) driven by a
 //         scripted scenario (walk, jump, falls, hypoxia, SOS, medication). The full
 //         firmware still runs: state machine, TFLite inference, DSP, RTOS queues, WiFi POST.
-// false : real MPU6050 / MAX30102 / DS3231 drivers (with per-sensor fallback to mock if a
+// false : real MPU6050 / MAX30102 (/ DS3231) drivers (with per-sensor fallback to mock if a
 //         chip does not answer on the bus and AUTO_FALLBACK_TO_MOCK is true).
 #ifndef SIMULATION_MODE
 #define SIMULATION_MODE true
@@ -71,21 +71,59 @@
 #define IMMEDIATE_PRIORITY        PRIO_NORMAL
 
 // -----------------------------------------------------------------------------
-// Pins (ESP32-WROOM-32)
+// Board + time source
 // -----------------------------------------------------------------------------
+// BOARD_XIAO_S3 (env xiao-s3*): Seeed XIAO ESP32-S3, 21 x 17.8 mm, built-in LiPo charger, for the
+// compact pod (hardware/enclosure/make_case_xiao.py). Default: ESP32 DevKit V1 (ESP32-WROOM-32).
+#ifndef BOARD_XIAO_S3
+#define BOARD_XIAO_S3 false
+#endif
+
+// USE_DS3231 true : time and daily medication alarms come from the DS3231 module (its INT pin).
+//            false: no RTC module. The ESP32's own clock keeps time; it is set over WiFi by NTP at
+//                   every telemetry window and the medication alarm is checked in software.
+//                   Until the first sync the clock starts from the firmware build time.
+#ifndef USE_DS3231
+#define USE_DS3231 (!BOARD_XIAO_S3)
+#endif
+// POSIX time zone for the medication schedule (MED_SCHEDULE is local time). Examples:
+// India "IST-5:30", Gulf "<+04>-4", UK "GMT0BST,M3.5.0/1,M10.5.0". Set yours in secrets.h or here.
+#ifndef TIME_ZONE
+#define TIME_ZONE           "IST-5:30"
+#endif
+#define NTP_SERVER_1        "pool.ntp.org"
+#define NTP_SERVER_2        "time.google.com"
+#define NTP_SYNC_WAIT_MS    3000
+
+// -----------------------------------------------------------------------------
+// Pins
+// -----------------------------------------------------------------------------
+#if BOARD_XIAO_S3
+// Seeed XIAO ESP32-S3 (pad name -> GPIO). D6/D7 (GPIO43/44) are left free.
+#define PIN_I2C_SDA         5       // D4
+#define PIN_I2C_SCL         6       // D5
+#define PIN_MPU_INT         2       // D1
+#define PIN_RTC_INT         -1      // no DS3231 on the compact build
+#define PIN_MAX_INT         3       // D2, open-drain, active LOW
+#define PIN_BTN_A           4       // D3  short: cancel fall countdown   long (2 s): SOS
+#define PIN_BTN_B           7       // D8  short: confirm medication / cancel fall
+#define PIN_BUZZER          8       // D9  buzzer via NPN
+#define PIN_MOTOR           9       // D10 vibration motor via NPN
+#define PIN_BATT_ADC        1       // D0  ADC1_CH0, 100k/100k divider from BAT+
+#else
+// ESP32 DevKit V1 (ESP32-WROOM-32)
 #define PIN_I2C_SDA         21
 #define PIN_I2C_SCL         22
-#define I2C_CLOCK_HZ        400000
-
 #define PIN_MPU_INT         27
 #define PIN_RTC_INT         33      // DS3231 INT/SQW, open-drain, active LOW
 #define PIN_MAX_INT         32      // MAX30102 INT, open-drain, active LOW
-
 #define PIN_BTN_A           4       // short: cancel fall countdown   long (2 s): SOS
 #define PIN_BTN_B           13      // short: confirm medication / cancel fall
 #define PIN_BUZZER          25      // active buzzer via NPN
 #define PIN_MOTOR           26      // vibration motor via NPN / MOSFET
 #define PIN_BATT_ADC        34      // ADC1_CH6, input only
+#endif
+#define I2C_CLOCK_HZ        400000
 
 // -----------------------------------------------------------------------------
 // I2C addresses
@@ -165,7 +203,7 @@
 #define VITALS_ALERT_REARM_S      120
 
 // -----------------------------------------------------------------------------
-// Medication reminders (DS3231 alarm 1, daily). hour, minute, label
+// Medication reminders (daily, local time: DS3231 alarm 1 or the NTP-synced clock). hour, minute, label
 // -----------------------------------------------------------------------------
 #define MED_SCHEDULE { {8, 0, "Metformin 500mg"}, {13, 0, "Amlodipine 5mg"}, {21, 0, "Atorvastatin 20mg"} }
 #if SIMULATION_MODE
