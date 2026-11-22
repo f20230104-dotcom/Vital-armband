@@ -31,6 +31,12 @@ scripts regenerate the meshes.
  skin
 ```
 
+**Fit check and full 3D model:** `python hardware/enclosure/assembly_xiao.py` models every part as a solid in its
+place, checks each one against the base, the lid and every other part, and writes **`assembly_xiao.glb`**: the case
+plus all 13 parts in colour, assembled (opens in Windows 3D Viewer, Blender, Fusion 360 or any online glTF viewer).
+Current result: no part overlaps the case or another part. The MAX30102, MPU6050, driver strip, switch, XIAO,
+antenna, motor, buzzer and buttons rest directly on a case surface (gap 0 mm); the battery has 1.1 mm all round.
+
 Parts it needs that the original did not: the XIAO ESP32-S3 (its FPC antenna comes in the box) and a 9 × 4.2 mm
 buzzer (a 12 mm buzzer is too tall for the lid). It no longer uses the ESP32 DevKit, the DS3231, the TP4056 or the
 AP2112K regulator.

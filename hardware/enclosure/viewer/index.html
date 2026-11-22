@@ -575,7 +575,7 @@ part({ id: "x-buttons", name: "Tactile buttons ×2 (top-press)", short: "Buttons
     bx(g, x - 3, x + 3, y - 3, y + 3, top - 3.5, top - 0.3, mat(0x2b2d31, { r: 0.6 }));
     bx(g, x - 3, x + 3, y - 3, y + 3, top - 0.3, top, mat(...SILVER));
     cylZ(g, x, y, top, top + 3.8, 1.7, mat(0x3c3f45, { r: 0.5 }), 28);
-    for (const [dx, dy] of [[-3.6, -2.2], [3.6, -2.2], [-3.6, 2.2], [3.6, 2.2]]) bx(g, x + dx - 0.6, x + dx + 0.6, y + dy - 0.3, y + dy + 0.3, top - 3.5, top - 3.2, mat(...SILVER));
+    for (const [dx, dy] of [[-2.2, -3.6], [2.2, -3.6], [-2.2, 3.6], [2.2, 3.6]]) bx(g, x + dx - 0.3, x + dx + 0.3, y + dy - 0.6, y + dy + 0.6, top - 3.5, top - 3.2, mat(...SILVER));
   }
 });
 
@@ -652,14 +652,14 @@ part({ id: "x-switch", name: "Slide power switch SS12D00", short: "Power switch"
   size: "8.6 × 3.6 × 3.5 mm body, 4 mm lever", where: "Skin layer, −Y corner; lever through the slot in the −Y wall (outside the strap)",
   links: "In the red battery lead, between the LiPo and the XIAO's BAT+ pad",
   note: "The XIAO charges through this switch, so leave it on while charging." }, (g, mat) => {
-  bx(g, -22, -13.4, -15, -11.4, X.floor, X.floor + 3.5, mat(...SILVER));
-  bx(g, -18.45, -16.95, -17.25, -15, 2.8, 4.4, mat(0x1a1a1a, { r: 0.5 }));
-  for (const x of [-20.2, -17.7, -15.2]) bx(g, x - 0.3, x + 0.3, -11.4, -9.0, X.floor + 1.4, X.floor + 2.1, mat(...SILVER));
+  bx(g, -21, -12.4, -15, -11.4, X.floor, X.floor + 3.5, mat(...SILVER));
+  bx(g, -17.45, -15.95, -17.25, -15, 2.8, 4.4, mat(0x1a1a1a, { r: 0.5 }));
+  for (const x of [-19.2, -16.7, -14.2]) bx(g, x - 0.3, x + 0.3, -11.4, -9.0, X.floor + 1.4, X.floor + 2.1, mat(...SILVER));
 });
 
 // wires (indicative)
-wire("red",   [[-17.5, 1.5, 9.2], [-21, -3, 8], [-21.2, -8, 5], [-20.2, -9.2, 3.55]]);
-wire("red",   [[-17.7, -9.2, 3.55], [-21.3, -13.4, 5], [-21.3, -14, 10], [-14, -13.9, 12.4], [-6, -7.5, 12.75]]);
+wire("red",   [[-17.5, 1.5, 9.2], [-21, -3, 8], [-21.2, -8, 5], [-19.2, -9.2, 3.55]]);
+wire("red",   [[-16.7, -9.2, 3.55], [-21.3, -13.4, 5], [-21.3, -14, 10], [-14, -13.9, 12.4], [-6, -7.5, 12.75]]);
 wire("black", [[-17.5, -1.5, 9.2], [-21.2, 0.5, 10.5], [-16, -1.5, 12.45], [-6, -4.0, 12.75]]);
 [["blue", -8.96, 9.62], ["yellow", -6.42, 7.08]].forEach(([c, x0, x1]) =>
   wire(c, [[x0, 3.5, 13.9], [x0 + 3, 7.2, 12.45], [17.5, 6.2, 12.3], [20.6, 1, 8.5], [20.6, -9, 5.5], [x1 + 2, -12.6, 4.6], [x1, -13.4, 3.5]]));

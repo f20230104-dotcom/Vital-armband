@@ -35,7 +35,8 @@ from make_case import OUT, box, cyl_x, preview, rrect, stl_bytes, write_stl
 # ----------------------------------------------------------------------------- parameters (mm)
 P = dict(
     # cavity (inside): battery 35 x 25 and the skin layer (MAX30102 20 x 15 beside MPU6050 20.3 x 15.6)
-    inner_l=44.0, inner_w=30.0, inner_r=3.0,
+    # inner corner radius 1 mm: a 3 mm radius clips the corners of the MPU6050, driver strip and switch
+    inner_l=44.0, inner_w=30.0, inner_r=1.0,
     wall=2.0, floor=1.8, lid_top=1.6, chamfer=1.6,
     # vertical stack: skin layer + foam + battery live in the base, the XIAO layer in the lid
     skin_h=4.0, foam_h=0.5, battery_h=6.0, top_h=5.5,
@@ -43,8 +44,8 @@ P = dict(
     rim_h=2.5, rim_t=1.2, fit=0.2,
     # MAX30102 window in the floor
     win_l=10.0, win_w=8.0, win_x=-10.5, win_y=0.0,
-    # slide switch (SS12D00) lever slot in the -Y wall, outside the strap width (|x| > 14.5)
-    sw_x=-17.7, sw_l=6.0, sw_h=2.8, sw_z=3.6,
+    # slide switch (SS12D00) lever slot in the -Y wall, between the corner and the strap cheek (|x| >= 14.5)
+    sw_x=-16.7, sw_l=4.4, sw_h=2.8, sw_z=3.6,
     # XIAO USB-C: the lid's -X wall is thinned to `usb_wall` around the port so a plug seats fully
     usb_y=-4.7, usb_w=9.6, usb_h=3.6, usb_z=15.6, usb_wall=1.4, usb_pocket_w=20.0,
     # top-press buttons (6 x 6 tactile, 7-8 mm tall) glued under bosses on the lid ceiling
@@ -82,7 +83,7 @@ def build(p: dict):
     li_l, li_w = ri_l - 2 * p["rim_t"], ri_w - 2 * p["rim_t"]
     r_in = max(0.5, p["inner_r"] - p["fit"] - p["rim_t"])
     lid = rrect(L, W, R).extrude(ht + p["lid_top"]).translate([0, 0, hb]) - \
-        rrect(li_l, li_w, r_in).extrude(ht).translate([0, 0, hb - 0.01])
+        rrect(li_l, li_w, r_in).extrude(ht + 0.01).translate([0, 0, hb - 0.01])
     rim = rrect(ri_l, ri_w, p["inner_r"] - p["fit"]).extrude(p["rim_h"] + 0.01) - \
         rrect(li_l, li_w, r_in).extrude(p["rim_h"] + 1).translate([0, 0, -0.5])
     lid += rim.translate([0, 0, hb - p["rim_h"]])
