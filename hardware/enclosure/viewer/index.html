@@ -1,0 +1,721 @@
+<title>Wrist Pod Assembly</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an engineering viewer. 3D stage on the left, a parts and controls rail on the right; stacks on phones. */
+:root {
+  --bg: #eef1f4; --surface: #ffffff; --fg: #151820; --muted: #5a6474; --line: #d6dce4;
+  --accent: #d9861a; --accent-ink: #ffffff; --stage: #e2e7ed; --edge: #4b6584; --chip: #f3f5f8;
+  --font-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1116; --surface: #151a22; --fg: #e6eaf0; --muted: #8a94a4; --line: #252d39;
+  --accent: #f0a540; --accent-ink: #1a1206; --stage: #0b0e13; --edge: #7d9cc0; --chip: #1b212b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #151a22; --fg: #e6eaf0; --muted: #8a94a4; --line: #252d39;
+  --accent: #f0a540; --accent-ink: #1a1206; --stage: #0b0e13; --edge: #7d9cc0; --chip: #1b212b; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+* { box-sizing: border-box; }
+button, input { font: inherit; color: inherit; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; border-bottom: 1px solid var(--line);
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); font-size: 13px; }
+.dims { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.dims span { font-family: var(--font-mono); font-size: 11.5px; background: var(--chip); border: 1px solid var(--line);
+  padding: 2px 8px; border-radius: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+.stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.lbl { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer;
+  font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; padding: 2px 6px 2px 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); color: var(--fg);
+  display: flex; align-items: center; gap: 5px; margin-top: -6px; }
+.lbl i { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
+.lbl.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.toolbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 4px; flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+.seg button { border: 0; background: transparent; padding: 4px 9px; border-radius: 4px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+button:focus-visible, input:focus-visible, .lbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.explode { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; max-width: 460px; }
+.explode label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.explode input { flex: 1; accent-color: var(--accent); min-width: 0; }
+.hint { position: absolute; right: 12px; bottom: 16px; font-size: 11.5px; color: var(--muted); text-align: right; }
+.tip { position: absolute; pointer-events: none; font-size: 12px; background: var(--fg); color: var(--bg); padding: 3px 7px;
+  border-radius: 4px; white-space: nowrap; transform: translate(12px, 12px); }
+.loadmsg { position: absolute; top: 56px; left: 12px; font-size: 12px; color: var(--muted); }
+
+aside { border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; min-height: 0; }
+.sec { padding: 14px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.sec h2 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.row > span { font-size: 13px; }
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.toggles label { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.toggles input { accent-color: var(--accent); }
+
+.stack { display: flex; height: 26px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+.stack div { display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; color: #fff; min-width: 0; overflow: hidden; }
+.stackkey { display: grid; grid-template-columns: repeat(3, auto); gap: 3px 12px; font-size: 11.5px; color: var(--muted); }
+.stackkey b { font-family: var(--font-mono); font-weight: 500; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+.group h3 { margin: 4px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.plist button { width: 100%; display: grid; grid-template-columns: 12px 1fr auto; gap: 9px; align-items: center; text-align: left;
+  background: transparent; border: 0; padding: 5px 6px; border-radius: 4px; cursor: pointer; }
+.plist button:hover { background: var(--chip); }
+.plist button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.plist i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.15); }
+.plist small { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.detail { display: grid; gap: 8px; }
+.detail h3 { margin: 0; font-size: 16px; }
+.detail .role { margin: 0; color: var(--muted); }
+.detail dl { margin: 0; display: grid; grid-template-columns: 78px 1fr; gap: 5px 10px; font-size: 13px; }
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; min-width: 0; }
+.detail .note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-left: 3px solid var(--accent); }
+.empty { color: var(--muted); margin: 0; font-size: 13px; }
+.foot { padding: 12px 16px 18px; font-size: 12px; color: var(--muted); }
+.foot code { font-family: var(--font-mono); font-size: 11px; }
+
+@media (max-width: 860px) {
+  .app { height: auto; display: block; }
+  main { display: block; }
+  .stage { height: 64vh; min-height: 380px; }
+  aside { border-left: 0; }
+  .hint { display: none; }
+  .dims { margin-left: 0; }
+}
+</style>
+
+<div class="app">
+  <header>
+    <h1>Wrist Pod Assembly</h1>
+    <p>Every component of the Vital wristband, placed where it goes inside the printed case.</p>
+    <div class="dims"><span>64 × 46 × 27.4 mm</span><span>58.4 mm across wrist</span><span>22 mm strap</span></div>
+  </header>
+  <main>
+    <div class="stage" id="stage">
+      <div class="labels" id="labels"></div>
+      <div class="toolbar" role="toolbar" aria-label="Camera views">
+        <div class="seg" id="views">
+          <button data-view="iso" aria-pressed="true">3D</button>
+          <button data-view="top">Top</button>
+          <button data-view="skin">Skin side</button>
+          <button data-view="end">Along arm</button>
+          <button data-view="side">Side</button>
+        </div>
+      </div>
+      <div class="loadmsg" id="loadmsg" hidden></div>
+      <div class="explode">
+        <label for="explode">Assembled</label>
+        <input id="explode" type="range" min="0" max="1" step="0.01" value="0.6" aria-label="Explode the assembly">
+        <label for="explode">Exploded</label>
+      </div>
+      <div class="hint">Drag to rotate · scroll or pinch to zoom · right-drag to pan<br>Click a part for details</div>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+
+    <aside>
+      <section class="sec">
+        <h2>Display</h2>
+        <div class="row"><span>Case</span>
+          <div class="seg" id="caseMode">
+            <button data-mode="glass" aria-pressed="true">See-through</button>
+            <button data-mode="solid">Solid</button>
+            <button data-mode="hidden">Hidden</button>
+          </div>
+        </div>
+        <div class="toggles">
+          <label><input type="checkbox" id="tLid" checked> Lid</label>
+          <label><input type="checkbox" id="tLabels" checked> Labels</label>
+          <label><input type="checkbox" id="tWires" checked> Wires</label>
+          <label><input type="checkbox" id="tWrist"> Wrist + strap</label>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Selected part</h2>
+        <div class="detail" id="detail"><p class="empty">Click a part in the model or the list below.</p></div>
+      </section>
+
+      <section class="sec">
+        <h2>Height stack (standard variant)</h2>
+        <div class="stack" id="stack"></div>
+        <div class="stackkey" id="stackkey"></div>
+      </section>
+
+      <section class="sec">
+        <h2>Parts</h2>
+        <div id="plist"></div>
+      </section>
+
+      <div class="foot">
+        Geometry comes from <code>hardware/enclosure/make_case.py</code> (standard variant). Module sizes are typical seller
+        dimensions; measure yours and adjust the parameters. Wire routes are indicative, so follow the wiring diagram for the
+        actual connections.
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="case_meshes.js"></script>
+<script>
+(() => {
+// ------------------------------------------------------------------ case numbers (mm, from make_case.py)
+const C = { floor: 1.8, hb: 16.8, lidIn: 25.8, top: 27.4, innerX: 30, innerY: 21, lidX: 28.6, lidY: 19.6, W: 46 };
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ------------------------------------------------------------------ renderer / scene
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.sortObjects = true;
+stage.prepend(renderer.domElement);
+renderer.domElement.tabIndex = 0;
+renderer.domElement.setAttribute("aria-label", "3D model of the wrist pod; drag to rotate");
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 1, 3000);
+camera.up.set(0, 0, 1);
+camera.position.set(150, -190, 140);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.09; controls.target.set(0, 0, 20);
+controls.minDistance = 40; controls.maxDistance = 900;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a3, 0.62));
+const key = new THREE.DirectionalLight(0xffffff, 0.78);
+key.position.set(80, -110, 190); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 500 });
+key.shadow.bias = -0.0006; key.shadow.radius = 3;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xdfe8ff, 0.32); fill.position.set(-120, 90, 60); scene.add(fill);
+const under = new THREE.DirectionalLight(0xffffff, 0.22); under.position.set(20, 30, -120); scene.add(under);
+
+const pod = new THREE.Group(); scene.add(pod);
+
+// ------------------------------------------------------------------ geometry helpers (all in mm, Z up)
+function bx(g, x0, x1, y0, y1, z0, z1, mat) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); g.add(m); return m;
+}
+function cylZ(g, cx, cy, z0, z1, r, mat, seg = 36) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, z1 - z0, seg), mat);
+  m.rotation.x = Math.PI / 2; m.position.set(cx, cy, (z0 + z1) / 2); g.add(m); return m;
+}
+function cylY(g, cx, cz, y0, y1, r, mat, seg = 28) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, y1 - y0, seg), mat);
+  m.position.set(cx, (y0 + y1) / 2, cz); g.add(m); return m;
+}
+function cylX(g, cy, cz, x0, x1, r, mat, seg = 24) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, x1 - x0, seg), mat);
+  m.rotation.z = Math.PI / 2; m.position.set((x0 + x1) / 2, cy, cz); g.add(m); return m;
+}
+function rrShape(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  r = Math.min(r, w / 2, h / 2);
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
+}
+function rbox(g, x0, x1, y0, y1, z0, z1, r, bev, mat) {
+  const w = x1 - x0, d = y1 - y0, h = z1 - z0;
+  const geo = new THREE.ExtrudeGeometry(rrShape(w - 2 * bev, d - 2 * bev, Math.max(0.1, r - bev)),
+    { depth: h - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 3, curveSegments: 8 });
+  const m = new THREE.Mesh(geo, mat); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z0 + bev); g.add(m); return m;
+}
+// stadium (USB-C shell) running along X
+function usbc(g, x0, x1, cy, cz, mat) {
+  const geo = new THREE.ExtrudeGeometry(rrShape(3.2, 8.94, 1.6), { depth: x1 - x0, bevelEnabled: false, curveSegments: 10 });
+  const m = new THREE.Mesh(geo, mat); m.rotation.y = Math.PI / 2; m.position.set(x0, cy, cz); g.add(m); return m;
+}
+function canvasTex(w, h, draw) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+function decal(g, x0, x1, y0, y1, z, tex) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, transparent: true }));
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z); g.add(m); return m;
+}
+function holes(g, pts, z0, z1, mat, r = 0.75) {
+  const geo = new THREE.CylinderGeometry(r, r, z1 - z0, 12); geo.rotateX(Math.PI / 2);
+  const im = new THREE.InstancedMesh(geo, mat, pts.length); const o = new THREE.Object3D();
+  pts.forEach(([x, y], i) => { o.position.set(x, y, (z0 + z1) / 2); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+  g.add(im); return im;
+}
+
+// ------------------------------------------------------------------ parts
+const parts = [];
+const LAYERS = { lid: "Lid · top layer", mid: "Base · middle layer", bot: "Base · bottom layer" };
+function part(def, build) {
+  const g = new THREE.Group(); const mats = [];
+  const mat = (color, o = {}) => {
+    const m = new THREE.MeshStandardMaterial({ color, roughness: o.r ?? 0.6, metalness: o.m ?? 0, emissive: 0x000000 });
+    mats.push(m); return m;
+  };
+  build(g, mat);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.pid = def.id;
+    if (o.material && !mats.includes(o.material)) mats.push(o.material); } });
+  const box = new THREE.Box3().setFromObject(g); const ctr = box.getCenter(new THREE.Vector3());
+  const p = { ...def, group: g, mats, anchor: new THREE.Vector3(ctr.x, ctr.y, box.max.z) };
+  mats.forEach(m => { m.userData.baseOpacity = m.opacity; m.userData.baseTransparent = m.transparent; });
+  pod.add(g); parts.push(p); return p;
+}
+
+const GOLD = [0xd4a64a, { m: 0.75, r: 0.35 }], SILVER = [0xc7ccd3, { m: 0.85, r: 0.3 }];
+const BLUE_PCB = 0x1d4f9c, PURPLE_PCB = 0x5b2c86, BLACK_PCB = 0x22252c;
+
+// ESP32 DevKit V1 (30-pin), headers removed, USB at the +X end
+const esp = part({ id: "esp32", name: "ESP32 DevKit V1", short: "ESP32", layer: "mid", swatch: "#2a2e36", ex: 36, dim: "55 × 28",
+  role: "Main controller: runs the four FreeRTOS tasks and the TinyML fall model.",
+  size: "55 × 28 mm, header pins removed", where: "On foam over the battery and sensor; micro-USB in the +X end opening for flashing",
+  links: "I²C on GPIO 21/22 to all three sensors; GPIO 25/26 to the driver strip; buttons on GPIO 4/13; battery sense on GPIO 34",
+  note: "Remove the header pins before fitting; it is the only way the 8 mm middle layer works." }, (g, mat) => {
+  const z0 = 8.8, z1 = 10.4;
+  bx(g, -25, 30, -14, 14, z0, z1, mat(BLACK_PCB, { r: 0.7 }));
+  bx(g, -25, 0.5, -9, 9, z1, z1 + 0.8, mat(0x1b2230, { r: 0.6 }));                    // module PCB
+  rbox(g, -19, 0, -8.6, 8.6, z1 + 0.8, z1 + 3.1, 0.6, 0.25, mat(...SILVER));           // RF shield
+  decal(g, -24.6, -19.4, -8.5, 8.5, z1 + 0.81, canvasTex(64, 200, (c, w, h) => {         // antenna trace
+    c.fillStyle = "#1b2230"; c.fillRect(0, 0, w, h); c.strokeStyle = "#c79a3d"; c.lineWidth = 5; c.beginPath();
+    let x = 12; c.moveTo(x, 10); for (let y = 10; y < h - 10; y += 22) { c.lineTo(x, y); x = x === 12 ? 52 : 12; c.lineTo(x, y); } c.stroke(); }));
+  bx(g, 25.2, 31, -3.75, 3.75, z1, z1 + 2.7, mat(...SILVER));                         // micro-USB
+  bx(g, 11.5, 16.5, 1.5, 6.5, z1, z1 + 0.9, mat(0x111111, { r: 0.4 }));               // CP2102
+  bx(g, 5, 11.5, -10.5, -7, z1, z1 + 1.6, mat(0x111111, { r: 0.4 }));                 // AMS1117
+  bx(g, 9.5, 11.5, -10.5, -7, z1 + 1.6, z1 + 1.7, mat(...SILVER));
+  for (const y of [-9.5, 9.5]) { bx(g, 22, 25.5, y - 1.6, y + 1.6, z1, z1 + 1.5, mat(0x9aa0a8, { m: 0.6 }));
+    cylZ(g, 23.75, y, z1 + 1.5, z1 + 2.1, 0.8, mat(0x18191c)); }
+  bx(g, 19, 20, 5, 6, z1, z1 + 0.5, mat(0xd8261f, { r: 0.3 }));
+  const pins = []; for (let i = 0; i < 15; i++) { const x = 2.5 + (i - 7) * 2.54; pins.push([x, 12.7], [x, -12.7]); }
+  holes(g, pins, z0 - 0.05, z1 + 0.05, mat(...GOLD));
+});
+
+// MAX30102, face down over the floor window
+const max = part({ id: "max30102", name: "MAX30102 pulse-oximeter", short: "MAX30102", layer: "bot", swatch: "#5b2c86", ex: 6, dim: "20 × 15",
+  role: "Optical sensor for heart rate, SpO₂ and breathing rate.",
+  size: "≈ 20 × 15 mm board, 5.6 × 3.3 mm sensor chip", where: "Glued face-down over the 10 × 8 mm floor window, chip flush with the outside",
+  links: "I²C address 0x57; INT to GPIO 32; powered from the 3.3 V rail",
+  note: "Some purple boards pull SDA/SCL up to 1.8 V; check yours, or move the pull-ups to 3.3 V." }, (g, mat) => {
+  bx(g, -29, -9, -7.5, 7.5, C.floor, C.floor + 1.6, mat(PURPLE_PCB, { r: 0.6 }));
+  bx(g, -21.8, -16.2, -1.65, 1.65, 0.3, C.floor, mat(0x15151a, { r: 0.25 }));          // sensor chip in the window
+  bx(g, -20.5, -19.2, -1.0, 1.0, 0.28, 0.32, mat(0x6a1010, { r: 0.2 }));                 // LED windows
+  bx(g, -18.6, -17.4, -1.0, 1.0, 0.28, 0.32, mat(0x202838, { r: 0.2 }));
+  bx(g, -14, -11.5, -5.5, -3.5, C.floor + 1.6, C.floor + 2.7, mat(0x111111, { r: 0.4 }));
+  bx(g, -14, -11.5, 3.5, 5.5, C.floor + 1.6, C.floor + 2.7, mat(0x111111, { r: 0.4 }));
+  holes(g, [[-10.3, -3.8], [-10.3, -1.27], [-10.3, 1.27], [-10.3, 3.8]], C.floor - 0.05, C.floor + 1.65, mat(...GOLD), 0.6);
+});
+
+// LiPo 602535
+const batt = part({ id: "lipo", name: "LiPo 602535 (3.7 V)", short: "LiPo", layer: "bot", swatch: "#a9b4c0", ex: 14, dim: "35 × 25 × 6",
+  role: "Power: about 400–500 mAh, roughly 9–12 h of runtime with WiFi bursts.",
+  size: "35 × 25 × 6 mm pouch (a 503035 is 30 mm wide)", where: "Between the two floor rails, against the end stop at +X",
+  links: "Red/black leads to TP4056 B+ / B−",
+  note: "A 30 mm-wide cell (503035) needs batt_w = 30 in make_case.py so the rails move apart." }, (g, mat) => {
+  rbox(g, -3, 29, -12.5, 12.5, C.floor, C.floor + 5.8, 1.4, 0.7, mat(0xb4bec9, { m: 0.55, r: 0.35 }));
+  bx(g, -6, -3, -11, 11, C.floor + 0.4, C.floor + 5.2, mat(0xd9a21b, { r: 0.45 }));    // PCM under Kapton
+  decal(g, 0, 27, -10.5, 10.5, C.floor + 5.81, canvasTex(540, 420, (c, w, h) => {
+    c.fillStyle = "#2a63c2"; c.fillRect(0, 0, w, h); c.fillStyle = "#fff"; c.font = "700 68px Arial"; c.fillText("LiPo 3.7 V", 34, 110);
+    c.font = "500 44px Arial"; c.fillText("602535 · 500 mAh", 34, 190); c.font = "400 30px Arial";
+    c.fillText("Li-polymer · PCM protected", 34, 260); c.fillText("Do not puncture or short", 34, 310);
+    c.strokeStyle = "#fff"; c.lineWidth = 4; c.strokeRect(18, 18, w - 36, h - 36); }));
+});
+
+// Slide power switch in the -Y gutter
+const sw = part({ id: "switch", name: "Slide power switch SS12D00", short: "Power switch", layer: "bot", swatch: "#8e959e", ex: 6, dim: "8.6 × 3.6",
+  role: "Turns the band off for storage and for flashing over USB.",
+  size: "8.6 × 3.6 × 3.5 mm body, 4 mm lever", where: "In the −Y gutter beside the sensor; lever through a 6 × 2.8 mm slot in the side wall",
+  links: "Between TP4056 OUT+ and the AP2112K regulator input",
+  note: "New in this revision: the case now has the lever slot at x = −20 mm, just above the floor." }, (g, mat) => {
+  bx(g, -24.3, -15.7, -21, -17.4, C.floor, C.floor + 3.5, mat(...SILVER));
+  bx(g, -20.75, -19.25, -23.25, -21, 2.8, 4.4, mat(0x1a1a1a, { r: 0.5 }));
+  for (const x of [-22.5, -20, -17.5]) bx(g, x - 0.3, x + 0.3, -17.4, -15, C.floor + 1.4, C.floor + 2.1, mat(...SILVER));
+});
+
+// Driver strip in the +Y gutter
+const strip = part({ id: "driver", name: "Driver strip (perfboard)", short: "Driver strip", layer: "bot", swatch: "#c4954a", ex: 6, dim: "52 × 6",
+  role: "The small parts: transistor drivers, battery divider and the 3.3 V regulator.",
+  size: "52 × 6 mm perfboard, parts under 3 mm tall", where: "On the floor in the +Y gutter, beside the battery rail",
+  links: "Q1/Q2 BC547 + 1 kΩ for buzzer (GPIO 25) and motor (GPIO 26) · 1N4148 across the motor · 100k/100k divider to GPIO 34 · AP2112K-3.3 + 220 µF",
+  note: "Lay the TO-92 transistors flat (legs bent 90°) so the strip stays under 4.5 mm." }, (g, mat) => {
+  const z = C.floor + 1.6;
+  bx(g, -26, 26, 14.8, 20.8, C.floor, z, mat(0xc4954a, { r: 0.8 }));
+  decal(g, -26, 26, 14.8, 20.8, z + 0.01, canvasTex(1040, 120, (c, w, h) => {
+    c.fillStyle = "#c4954a"; c.fillRect(0, 0, w, h); c.fillStyle = "#6b4a1c";
+    for (let i = 0; i < 20; i++) for (const y of [36, 84]) { c.beginPath(); c.arc(26 + i * 50.8, y, 9, 0, 7); c.fill(); } }));
+  const black = mat(0x16171a, { r: 0.45 });
+  for (const x of [-22, -11]) {            // TO-92 laid flat: half-cylinder, flat face on the board
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 4.2, 24, 1, false, 0, Math.PI), black);
+    m.rotation.y = -Math.PI / 2; m.position.set(x, 17.8, z); g.add(m);
+    bx(g, x - 2.3, x + 2.3, 15.7, 19.9, z, z + 0.05, black); }
+  const res = (x, col) => { cylX(g, 17.8, z + 0.9, x - 1.7, x + 1.7, 0.9, mat(col, { r: 0.5 }));
+    cylX(g, 17.8, z + 0.5, x - 3.2, x + 3.2, 0.25, mat(...SILVER), 8); };
+  res(-16.5, 0xd8c39b); res(-5.5, 0xd8c39b); res(5, 0x6f9fd8); res(10, 0x6f9fd8);
+  cylX(g, 17.8, z + 0.9, -1.7, 1.7, 0.9, mat(0xe0773a, { r: 0.2 })); cylX(g, 17.8, z + 0.9, 1.0, 1.5, 0.93, black);
+  bx(g, 13, 16, 16.3, 19.3, z, z + 1.1, black);
+  bx(g, 16.85, 24.15, 15.65, 19.95, z, z + 2.9, mat(0xe2b52a, { r: 0.45 })); bx(g, 16.85, 18, 15.65, 19.95, z + 2.9, z + 2.95, mat(0x8a5a10));
+});
+
+// Foam tape spacers
+const foam = part({ id: "foam", name: "Foam tape spacers", short: "Foam", layer: "mid", swatch: "#e7e2d4", ex: 24, dim: "1–4", nolabel: true,
+  role: "Double-sided foam tape that holds the stack still and insulates the boards.",
+  size: "1 mm and 4 mm layers", where: "Battery to ESP32, sensor to ESP32, and behind the side buttons",
+  links: "None", note: "Use foam rather than hot glue on the LiPo: heat and pressure on the pouch are both bad." }, (g, mat) => {
+  const f = mat(0xc9c2ae, { r: 1 });
+  bx(g, -2, 26, -10, 10, C.floor + 5.8, 8.8, f);
+  bx(g, -24, -12, -6, 6, C.floor + 2.7, 8.8, f);
+});
+
+// TP4056 USB-C charger
+const tp = part({ id: "tp4056", name: "TP4056 USB-C charger", short: "TP4056", layer: "lid", swatch: "#1d4f9c", ex: 58, dim: "26 × 17",
+  role: "Charges the LiPo from USB-C and protects it from over-discharge.",
+  size: "26 × 17 mm board", where: "Lid, −Y half; USB-C at the −X end opening",
+  links: "B+/B− to the battery; OUT+ through the power switch to the regulator",
+  note: "Swap the 1.2 kΩ programming resistor (R3) for 2.4 kΩ, about 500 mA, which suits a 500 mAh cell." }, (g, mat) => {
+  const z0 = 17.9, z1 = 18.9;
+  bx(g, -28.6, -2.6, -19.6, -2.6, z0, z1, mat(BLUE_PCB, { r: 0.6 }));
+  usbc(g, -29.3, -21.8, -11.1, z1 + 1.6, mat(...SILVER));
+  bx(g, -16, -11, -13.1, -9.1, z1, z1 + 1.5, mat(0x111111, { r: 0.4 }));
+  bx(g, -10, -7, -7, -4.5, z1, z1 + 1, mat(0x111111, { r: 0.4 })); bx(g, -10, -7, -17.7, -15.2, z1, z1 + 1, mat(0x111111, { r: 0.4 }));
+  bx(g, -19, -18, -17, -16.2, z1, z1 + 0.6, mat(0xff3b30, { r: 0.2 })); bx(g, -19, -18, -6, -5.2, z1, z1 + 0.6, mat(0x2f7bff, { r: 0.2 }));
+  bx(g, -14.5, -13.3, -6.6, -5.8, z1, z1 + 0.45, mat(0x101010));
+  for (const [x, y] of [[-4.2, -16.5], [-4.2, -5.7], [-9, -18.6], [-9, -3.6]]) bx(g, x - 1.1, x + 1.1, y - 0.9, y + 0.9, z1, z1 + 0.06, mat(...GOLD));
+  bx(g, -20, -10, -16.5, -6, z1 + 1.6, C.lidIn, mat(0xc9c2ae, { r: 1 }));               // foam block to the lid
+});
+
+// MPU6050 GY-521, upside down against the lid
+const mpu = part({ id: "mpu6050", name: "MPU6050 (GY-521)", short: "MPU6050", layer: "lid", swatch: "#2a5fae", ex: 58, dim: "20.3 × 15.6",
+  role: "Accelerometer and gyroscope that feed the fall detector at 50 Hz.",
+  size: "20.3 × 15.6 mm board", where: "Lid, −Y half; stuck to the lid, chip facing down",
+  links: "I²C address 0x69 (AD0 tied to 3.3 V); INT to GPIO 27",
+  note: "After mounting, set IMU_AXIS_SRC / IMU_AXIS_SIGN in include/config.h to match how the board sits." }, (g, mat) => {
+  const z0 = 23.2, z1 = 24.8;
+  bx(g, -2, 18.3, -19.4, -3.8, z0, z1, mat(BLUE_PCB, { r: 0.6 }));
+  bx(g, 6.2, 10.2, -13.6, -9.6, z0 - 0.9, z0, mat(0x111111, { r: 0.4 }));
+  bx(g, 1, 3, -8, -6.5, z0 - 1.1, z0, mat(0x111111, { r: 0.4 }));
+  bx(g, 13, 14, -8.5, -7.7, z0 - 0.5, z0, mat(0x3cff6a, { r: 0.2 }));
+  const pins = []; for (let i = 0; i < 8; i++) pins.push([-0.9 + 1.5 + i * 2.54, -18.2]);
+  holes(g, pins, z0 - 0.05, z1 + 0.05, mat(...GOLD), 0.6);
+  bx(g, 0, 16, -17, -6, z1, C.lidIn, mat(0xc9c2ae, { r: 1 }));
+});
+
+// Coin vibration motor
+const motor = part({ id: "motor", name: "Coin vibration motor 1027", short: "Vibration motor", layer: "lid", swatch: "#b7bdc5", ex: 58, dim: "Ø10 × 2.7",
+  role: "Silent alert on the wrist: medication reminders and the fall cancel window.",
+  size: "10 mm × 2.7 mm", where: "Lid, −Y corner at the +X end, self-adhesive back on the lid",
+  links: "Through Q2 on the driver strip to GPIO 26, with a 1N4148 across it",
+  note: "Mount it on the lid so the buzz carries through the case to the wrist." }, (g, mat) => {
+  cylZ(g, 23.5, -12, 23.1, C.lidIn, 5, mat(...SILVER), 48);
+  cylZ(g, 23.5, -12, 23.0, 23.1, 4.2, mat(0x8d939b, { m: 0.7, r: 0.4 }), 48);
+});
+
+// DS3231 ZS-042, coin cell toward the lid
+const rtc = part({ id: "ds3231", name: "DS3231 RTC (ZS-042)", short: "DS3231", layer: "lid", swatch: "#1d4f9c", ex: 58, dim: "38 × 22",
+  role: "Keeps the time for medication reminders, even with the battery switched off.",
+  size: "38 × 22 mm board with a CR2032 holder", where: "Lid, +Y half; coin cell facing the lid",
+  links: "I²C address 0x68 (EEPROM 0x50); SQW/INT to GPIO 33",
+  note: "With a CR2032, remove the charging resistor and diode near the pins; the board tries to charge a non-rechargeable cell." }, (g, mat) => {
+  const z0 = 20.6, z1 = 22.2;
+  bx(g, -28.4, 9.6, -2.4, 19.6, z0, z1, mat(BLUE_PCB, { r: 0.6 }));
+  bx(g, -21, -10.7, 5, 12.5, z0 - 2.5, z0, mat(0x111111, { r: 0.4 }));
+  bx(g, -4.5, 0.5, 2, 6, z0 - 1.5, z0, mat(0x111111, { r: 0.4 }));
+  bx(g, 3, 5, 14, 16, z0 - 0.6, z0, mat(0x2a2a2a)); bx(g, 3, 5, 11, 12.5, z0 - 0.9, z0, mat(0x111111));
+  cylZ(g, -17.9, 8.6, z1, z1 + 1, 10.6, mat(0x1a1a1a, { r: 0.6 }), 56);
+  cylZ(g, -17.9, 8.6, z1 + 1, z1 + 3.4, 10, mat(...SILVER), 56);
+  bx(g, -10, -5, 6.6, 10.6, z1 + 1, z1 + 3.6, mat(...SILVER));
+  const pins = []; for (let i = 0; i < 6; i++) pins.push([8.3, 3.3 + i * 2.54]); for (let i = 0; i < 4; i++) pins.push([-27.1, 4.5 + i * 2.54]);
+  holes(g, pins, z0 - 0.05, z1 + 0.05, mat(...GOLD), 0.6);
+});
+
+// Buzzer under the sound holes
+const buzz = part({ id: "buzzer", name: "Buzzer 12 mm", short: "Buzzer", layer: "lid", swatch: "#26282c", ex: 58, dim: "Ø12 × 8.5",
+  role: "Audible alarm for falls, low SpO₂ and missed doses.",
+  size: "12 mm × 8.5 mm", where: "Lid, under the seven sound holes, face against the lid",
+  links: "Through Q1 on the driver strip to GPIO 25", note: "Glue the rim, not the face, so the sound holes stay clear." }, (g, mat) => {
+  cylZ(g, 16, 4, 17.3, C.lidIn - 0.4, 6, mat(0x26282c, { r: 0.5 }), 48);
+  cylZ(g, 16, 4, C.lidIn - 0.4, C.lidIn, 5.4, mat(0x1a1b1e, { r: 0.4 }), 48);
+  for (const y of [2, 6]) bx(g, 15.7, 16.3, y - 0.3, y + 0.3, 15.8, 17.3, mat(...SILVER));
+});
+
+// Two side buttons on the +Y wall
+const btns = part({ id: "buttons", name: "Tactile buttons ×2", short: "Buttons", layer: "lid", swatch: "#3c3f45", ex: 58, dim: "6 × 6",
+  role: "A: cancel a fall alert, hold 2 s for SOS. B: confirm a medication dose or cancel.",
+  size: "6 × 6 mm, 7–8 mm tall", where: "Lid, +Y wall; stems through the two side holes",
+  links: "Button A to GPIO 4, Button B to GPIO 13; the other leg to GND (internal pull-ups)",
+  note: "Back each button with a foam block so pressing it does not push the button into the case." }, (g, mat) => {
+  const zc = C.hb + 4.5;
+  for (const x of [14, 24]) {
+    bx(g, x - 3, x + 3, 15.6, 19.1, zc - 3, zc + 3, mat(0x2b2d31, { r: 0.6 }));
+    bx(g, x - 3, x + 3, 19.1, 19.4, zc - 3, zc + 3, mat(...SILVER));
+    cylY(g, x, zc, 19.4, 23.3, 1.7, mat(0x3c3f45, { r: 0.5 }));
+    for (const [dx, dz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) bx(g, x + dx - 0.3, x + dx + 0.3, 14.4, 15.6, zc + dz - 0.3, zc + dz + 0.3, mat(...SILVER));
+  }
+  bx(g, 10.5, 27.5, 11.5, 14.4, zc - 3, zc + 3, mat(0xc9c2ae, { r: 1 }));
+});
+
+// ------------------------------------------------------------------ wires (assembled view only)
+const wires = new THREE.Group(); pod.add(wires);
+const WC = { red: 0xd23a2c, black: 0x202020, blue: 0x2f6fd6, yellow: 0xe6b81f, green: 0x2f9e57, white: 0xe8e8e8, orange: 0xf08a24 };
+function wire(color, pts) {
+  const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, "centripetal");
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(24, pts.length * 14), 0.38, 8, false),
+    new THREE.MeshStandardMaterial({ color: WC[color], roughness: 0.55 }));
+  m.castShadow = true; wires.add(m);
+}
+wire("red",   [[-3, 1.5, 4.6], [-7, 1.5, 5], [-8.4, -8, 5.6], [-9, -17.4, 7.5], [-9, -18.8, 13], [-9, -18, 17.5], [-9, -18.6, 19]]);
+wire("black", [[-3, -1.5, 4.6], [-7.6, -1.5, 4.8], [-8.3, -6, 5.8], [-9.6, -3.8, 12], [-9.4, -3.4, 17.5], [-9, -3.6, 19]]);
+wire("red",   [[-4.2, -16.5, 19], [-3.6, -19.4, 17], [-10, -20, 11], [-17, -18.5, 6], [-20, -15.4, 3.75]]);
+wire("red",   [[-17.5, -15.4, 3.75], [-14, -12, 3.3], [-7.6, -8, 3.1], [-7.6, 9, 3.1], [-6, 16, 3.7], [8, 17.6, 3.7], [14.5, 17.8, 4.4]]);
+wire("orange",[[15.5, 18.6, 4.4], [18.5, 18.8, 7], [20.3, 15.6, 10], [20.28, 12.7, 10.5]]);
+wire("black", [[25, 19.8, 3.6], [24, 19.5, 8], [18.6, 15, 10.2], [17.74, 12.7, 10.5]]);
+wire("black", [[15.9, 2, 15.9], [15, 10, 14.6], [6, 17.4, 8], [-12, 18.6, 4], [-22, 18.2, 3.9]]);
+wire("blue",  [[23.5, -12, 23.0], [22, -6, 16], [12, 9, 14.4], [0, 16.8, 9], [-11, 18.2, 3.9]]);
+wire("green", [[13.2, 14.4, 19.2], [11.6, 14, 15], [10.12, 13.3, 11.6], [10.12, 12.7, 10.5]]);
+wire("white", [[23.2, 14.4, 19.2], [21, 8, 15.2], [16.5, -8, 14], [15.24, -12.7, 10.5]]);
+wire("blue",  [[-5.12, 12.7, 10.5], [-4, 14.4, 13.6], [3, 12.4, 17.6], [8.3, 8.38, 20.4]]);
+wire("yellow",[[-12.74, 12.7, 10.5], [-11, 14.8, 13.8], [3, 13.8, 18.2], [8.3, 10.92, 20.4]]);
+wire("red",   [[20.28, 12.7, 10.6], [18.5, 12.6, 14.6], [12, 9.5, 18.6], [8.3, 5.84, 20.4]]);
+wire("black", [[17.74, 12.7, 10.6], [16, 11.4, 14.4], [10.6, 8.6, 18.6], [8.3, 3.3, 20.4]]);
+[["blue", 8.38, 7.6], ["yellow", 10.92, 6.1], ["red", 5.84, 3.4], ["black", 3.3, 1.9]].forEach(([c, y, x]) =>
+  wire(c, [[8.3, y, 20.4], [7, y - 4, 20.2], [x + 1.5, -9, 21.8], [x, -18.2, 23.1]]));
+wire("blue",  [[-10.3, 1.27, 3.5], [-10.6, 6, 5], [-7.6, 11, 7.6], [-5.12, 12.7, 8.8]]);
+wire("yellow",[[-10.3, 3.8, 3.5], [-11.4, 8, 5], [-12, 11.5, 7.6], [-12.74, 12.7, 8.8]]);
+wire("red",   [[-10.3, -1.27, 3.5], [-11.4, 4, 3.8], [-12, 12, 3.8], [-12.5, 16.4, 3.5]]);
+wire("black", [[-10.3, -3.8, 3.5], [-12.6, 2, 3.7], [-13.4, 12, 3.7], [-13.8, 16.8, 3.5]]);
+wire("white", [[7.5, 17.4, 4], [-6, 12, 3.2], [-7.5, -6, 3.2], [-7.6, -11, 6], [-7.66, -12.7, 8.8]]);
+
+// ------------------------------------------------------------------ case (STL) + wrist + strap
+const caseMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0, side: THREE.DoubleSide });
+const caseParts = {};
+function parseSTL(buf) {
+  const dv = new DataView(buf), n = dv.getUint32(80, true), pos = new Float32Array(n * 9);
+  for (let i = 0; i < n; i++) { const o = 84 + i * 50 + 12; for (let k = 0; k < 9; k++) pos[i * 9 + k] = dv.getFloat32(o + k * 4, true); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+async function loadCase() {
+  const defs = [["base", 0x8fb3d6, 0], ["lid", 0xa7c3de, 84]];
+  if (!window.CASE_MESHES) throw new Error("case_meshes.js missing");
+  for (const [name, color, ex] of defs) {
+    const bin = atob(window.CASE_MESHES[name]), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const geo = parseSTL(bytes.buffer);
+    const grp = new THREE.Group(); const mesh = new THREE.Mesh(geo, caseMat(color)); mesh.renderOrder = 5;
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x4b6584, transparent: true, opacity: 0.75 }));
+    edges.renderOrder = 6; grp.add(mesh, edges); grp.userData.ex = ex; pod.add(grp);
+    caseParts[name] = { grp, mesh, edges };
+  }
+  applyCase(); applyExplode(); fitView(currentView, false);
+}
+
+const wristGrp = new THREE.Group(); pod.add(wristGrp); wristGrp.visible = false;
+(() => {
+  const a = 31, b = 21, cz = -21.6;
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd8a383, roughness: 0.8 });
+  const w = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 120, 72, 1, false), skin);
+  // cylinder axis is local Y; rotated onto world X, local X becomes world Y and local Z stays Z
+  w.rotation.z = Math.PI / 2; w.scale.set(a, 1, b); w.position.set(0, 0, cz); w.receiveShadow = true; wristGrp.add(w);
+  const pts = []; const A = a + 1.0, B = b + 1.0;
+  const half = []; half.push([25.8, 4.8], [28.2, 4.9], [29.9, 3.4], [30.2, 0.6], [31.2, -4.5]);
+  for (let t = 10; t >= -90; t -= 6) { const r = t * Math.PI / 180; half.push([A * Math.cos(r), cz + B * Math.sin(r)]); }
+  half.forEach(([y, z]) => pts.push(new THREE.Vector3(0, y, z)));
+  half.slice(0, -1).reverse().forEach(([y, z]) => pts.push(new THREE.Vector3(0, -y, z)));
+  const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+  const shape = new THREE.Shape(); shape.moveTo(-11, -0.8); shape.lineTo(11, -0.8); shape.lineTo(11, 0.8); shape.lineTo(-11, 0.8); shape.lineTo(-11, -0.8);
+  const strap = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { steps: 260, bevelEnabled: false, extrudePath: curve }),
+    new THREE.MeshStandardMaterial({ color: 0x2f3640, roughness: 0.9, side: THREE.DoubleSide }));
+  strap.castShadow = true; wristGrp.add(strap);
+})();
+
+// ------------------------------------------------------------------ state + UI
+let caseMode = "glass", selected = null, hovered = null, currentView = "iso";
+const $ = (id) => document.getElementById(id);
+const explodeEl = $("explode");
+const ease = (t) => t * t * (3 - 2 * t);
+
+function applyExplode() {
+  const e = ease(+explodeEl.value);
+  parts.forEach(p => { p.group.position.z = p.ex * e; });
+  Object.values(caseParts).forEach(c => { c.grp.position.z = c.grp.userData.ex * e; });
+  wires.visible = $("tWires").checked && +explodeEl.value < 0.02;
+  wristGrp.visible = $("tWrist").checked && +explodeEl.value < 0.02;
+}
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function applyTheme() {
+  scene.background = new THREE.Color(cssVar("--stage") || "#e2e7ed");
+  const edge = new THREE.Color(cssVar("--edge") || "#4b6584");
+  Object.values(caseParts).forEach(c => c.edges.material.color.copy(edge));
+}
+function applyCase() {
+  const lidOn = $("tLid").checked;
+  Object.entries(caseParts).forEach(([name, c]) => {
+    const show = caseMode !== "hidden" && (name === "base" || lidOn);
+    c.grp.visible = show;
+    const m = c.mesh.material;
+    if (caseMode === "glass") { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; c.edges.visible = true; c.mesh.castShadow = false; }
+    else { m.transparent = false; m.opacity = 1; m.depthWrite = true; c.edges.visible = false; c.mesh.castShadow = true; c.mesh.receiveShadow = true;
+      m.color.set(name === "base" ? 0x34404f : 0x45536a); }
+    if (caseMode === "glass") m.color.set(name === "base" ? 0x8fb3d6 : 0xa7c3de);
+    m.needsUpdate = true;
+  });
+}
+function setDim(p, dim) {
+  p.mats.forEach(m => { m.transparent = dim || m.userData.baseTransparent; m.opacity = dim ? 0.1 : m.userData.baseOpacity; m.depthWrite = !dim; m.needsUpdate = true; });
+}
+function setGlow(p, on) { p.mats.forEach(m => { if (m.emissive) m.emissive.setHex(on ? 0x5a3a08 : 0x000000); }); }
+function select(id) {
+  selected = id || null;
+  parts.forEach(p => setDim(p, !!selected && p.id !== selected));
+  document.querySelectorAll(".plist button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === selected));
+  labelEls.forEach((el, id2) => el.classList.toggle("sel", id2 === selected));
+  const p = parts.find(q => q.id === selected), d = $("detail");
+  if (!p) { d.innerHTML = '<p class="empty">Click a part in the model or the list below.</p>'; return; }
+  d.innerHTML = `<h3></h3><p class="role"></p><dl><dt>Size</dt><dd data-k="size"></dd><dt>Where</dt><dd data-k="where"></dd>
+    <dt>Connects</dt><dd data-k="links"></dd><dt>Layer</dt><dd data-k="layer"></dd></dl><p class="note"></p>`;
+  d.querySelector("h3").textContent = p.name; d.querySelector(".role").textContent = p.role;
+  d.querySelector('[data-k="size"]').textContent = p.size; d.querySelector('[data-k="where"]').textContent = p.where;
+  d.querySelector('[data-k="links"]').textContent = p.links; d.querySelector('[data-k="layer"]').textContent = LAYERS[p.layer];
+  d.querySelector(".note").textContent = p.note;
+  const r = d.getBoundingClientRect(), ar = d.closest("aside").getBoundingClientRect();
+  if (r.top < ar.top || r.top > ar.bottom - 60) d.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+}
+function toggleSelect(id) { select(id === selected ? null : id); }
+
+// parts list
+const plist = $("plist");
+["lid", "mid", "bot"].forEach(layer => {
+  const box = document.createElement("div"); box.className = "group";
+  box.innerHTML = `<h3>${LAYERS[layer]}</h3>`; const ul = document.createElement("ul"); ul.className = "plist";
+  parts.filter(p => p.layer === layer).forEach(p => {
+    const li = document.createElement("li"); const b = document.createElement("button");
+    b.dataset.id = p.id; b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<i style="background:${p.swatch}"></i><span></span><small></small>`;
+    b.querySelector("span").textContent = p.name; b.querySelector("small").textContent = p.dim + " mm";
+    b.addEventListener("click", () => toggleSelect(p.id)); li.appendChild(b); ul.appendChild(li);
+  });
+  box.appendChild(ul); plist.appendChild(box);
+});
+
+// height stack bar
+const STACK = [["Floor", 1.8, "#6c7f96"], ["Battery", 6, "#8d9bab"], ["Foam", 1, "#bdb6a2"], ["ESP32", 8, "#2a2e36"], ["Top layer", 9, "#1d4f9c"], ["Lid", 1.6, "#9a6a1e"]];
+$("stack").innerHTML = STACK.map(([n, h, c]) => `<div style="flex:${h};background:${c}" title="${n} ${h} mm">${h >= 6 ? h : ""}</div>`).join("");
+$("stackkey").innerHTML = STACK.map(([n, h, c]) => `<span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c};margin-right:5px"></i>${n} <b>${h}</b></span>`).join("") +
+  `<span>Total <b>27.4 mm</b></span>`;
+
+// labels
+const labelBox = $("labels"); const labelEls = new Map();
+parts.filter(p => !p.nolabel).forEach(p => {
+  const el = document.createElement("div"); el.className = "lbl"; el.tabIndex = 0; el.setAttribute("role", "button");
+  el.innerHTML = `<i style="background:${p.swatch}"></i>`; el.append(p.short);
+  el.addEventListener("click", () => toggleSelect(p.id));
+  el.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggleSelect(p.id); } });
+  labelBox.appendChild(el); labelEls.set(p.id, el);
+});
+const tmp = new THREE.Vector3();
+function updateLabels() {
+  const on = $("tLabels").checked, w = stage.clientWidth, h = stage.clientHeight;
+  labelBox.hidden = !on; if (!on) return;
+  parts.forEach(p => { const el = labelEls.get(p.id); if (!el) return;
+    tmp.copy(p.anchor); tmp.z += p.group.position.z; tmp.project(camera);
+    const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+    el.style.display = vis ? "" : "none";
+    if (vis) { el.style.left = ((tmp.x + 1) / 2 * w).toFixed(1) + "px"; el.style.top = ((1 - tmp.y) / 2 * h).toFixed(1) + "px"; }
+  });
+}
+
+// controls wiring
+document.querySelectorAll("#caseMode button").forEach(b => b.addEventListener("click", () => {
+  caseMode = b.dataset.mode; document.querySelectorAll("#caseMode button").forEach(x => x.setAttribute("aria-pressed", x === b)); applyCase(); }));
+$("tLid").addEventListener("change", applyCase);
+["tWires", "tWrist"].forEach(id => $(id).addEventListener("change", () => {
+  if ($(id).checked && +explodeEl.value > 0.02) { explodeEl.value = 0; }
+  applyExplode(); if (id === "tWrist") fitView(currentView, true); }));
+explodeEl.addEventListener("input", applyExplode);
+
+// camera views
+const VIEWS = { iso: [1.0, -1.3, 0.95], top: [0, -0.0001, 1], skin: [0, -0.0001, -1], end: [-1, 0, 0.12], side: [0, -1, 0.12] };
+let tween = null;
+function fitView(name, animate = true) {
+  currentView = name;
+  document.querySelectorAll("#views button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === name));
+  const box = new THREE.Box3();
+  parts.forEach(p => box.expandByObject(p.group));
+  Object.values(caseParts).forEach(c => { if (c.grp.visible) box.expandByObject(c.grp); });
+  if (wristGrp.visible) box.union(new THREE.Box3(new THREE.Vector3(-40, -34, -45), new THREE.Vector3(40, 34, 30)));
+  const ctr = box.getCenter(new THREE.Vector3()), rad = box.getSize(new THREE.Vector3()).length() / 2;
+  const aspect = Math.max(0.6, Math.min(camera.aspect, 1.6));
+  const dist = rad / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.min(1, aspect) * 0.97;
+  const dir = new THREE.Vector3(...VIEWS[name]).normalize();
+  const toPos = ctr.clone().add(dir.multiplyScalar(dist));
+  if (!animate || reduceMotion) { camera.position.copy(toPos); controls.target.copy(ctr); controls.update(); return; }
+  tween = { t0: performance.now(), fromP: camera.position.clone(), fromT: controls.target.clone(), toP: toPos, toT: ctr };
+}
+document.querySelectorAll("#views button").forEach(b => b.addEventListener("click", () => fitView(b.dataset.view, true)));
+
+// picking
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const tip = $("tip");
+const pickables = []; parts.forEach(p => p.group.traverse(o => { if (o.isMesh) pickables.push(o); }));
+let downAt = null;
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(pickables, false).find(h => {
+    const p = parts.find(q => q.id === h.object.userData.pid); return !selected || p.id === selected || h.object.material.opacity > 0.5; });
+  return hit ? parts.find(q => q.id === hit.object.userData.pid) : null;
+}
+renderer.domElement.addEventListener("pointermove", (ev) => {
+  if (ev.buttons) { tip.hidden = true; return; }
+  const p = pick(ev);
+  if (p !== hovered) { if (hovered) setGlow(hovered, false); hovered = p; if (p) setGlow(p, true); }
+  renderer.domElement.style.cursor = p ? "pointer" : "grab";
+  if (p) { const r = stage.getBoundingClientRect(); tip.hidden = false; tip.textContent = p.name;
+    tip.style.left = (ev.clientX - r.left) + "px"; tip.style.top = (ev.clientY - r.top) + "px"; } else tip.hidden = true;
+});
+renderer.domElement.addEventListener("pointerleave", () => { if (hovered) setGlow(hovered, false); hovered = null; tip.hidden = true; });
+renderer.domElement.addEventListener("pointerdown", (ev) => { downAt = [ev.clientX, ev.clientY]; });
+renderer.domElement.addEventListener("pointerup", (ev) => {
+  if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const p = pick(ev); if (p) toggleSelect(p.id); else if (selected) { selected = null; select(null); }
+});
+
+// resize + theme
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+applyTheme();
+
+// loop
+function frame(now) {
+  if (tween) { const t = Math.min(1, (now - tween.t0) / 650), k = ease(t);
+    camera.position.lerpVectors(tween.fromP, tween.toP, k); controls.target.lerpVectors(tween.fromT, tween.toT, k); if (t >= 1) tween = null; }
+  controls.update(); renderer.render(scene, camera); updateLabels(); requestAnimationFrame(frame);
+}
+applyExplode(); fitView("iso", false); requestAnimationFrame(frame);
+loadCase().catch((err) => { console.error(err); const m = $("loadmsg"); m.hidden = false;
+  m.textContent = "The case could not load: case_meshes.js must sit next to this page. Re-run make_case.py to create it."; });
+})();
+</script>

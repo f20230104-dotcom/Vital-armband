@@ -13,6 +13,10 @@ parameters at the top of that file and re-run to resize.
 
 Across the wrist, including the strap bars, the pod measures 58.4 mm. The long side (64 mm) runs along the forearm.
 
+**3D assembly viewer:** [`viewer/index.html`](viewer/index.html) shows every component in place inside the case.
+You can explode the stack, click a part for its size, position and wiring, and show the pod on a wrist with the strap.
+It opens straight from disk (keep `case_meshes.js` next to it). `make_case.py` regenerates the meshes.
+
 ## Printing
 
 | Setting | Value |
@@ -29,10 +33,12 @@ Print time is roughly 1.5–2 h for both parts; about 25 g of filament.
 ## What goes where
 
 ```
- lid    (top layer)   +Y half: DS3231, buzzer under the sound holes, vibration motor, 2 buttons on the +Y wall
-                      -Y half: TP4056 (USB-C at the -X end opening), MPU6050
+ lid    (top layer)   +Y half: DS3231, buzzer under the sound holes, 2 buttons on the +Y wall
+                      -Y half: TP4056 (USB-C at the -X end opening), MPU6050, vibration motor
  base   (middle)      ESP32 DevKit, header pins removed, USB toward the +X end opening
  base   (bottom)      MAX30102 face-down over the floor window | LiPo 602535 between the rails
+                      +Y gutter: driver strip (perfboard: 2x BC547 + 1k, 1N4148, 100k/100k divider, AP2112K, 220 uF)
+                      -Y gutter: SS12D00 slide power switch, lever through the slot in the -Y wall
  skin
 ```
 
@@ -40,7 +46,8 @@ Print time is roughly 1.5–2 h for both parts; about 25 g of filament.
 
 1. Remove all header pins; solder thin silicone wires (wiring: see the wiring diagram in the project notes).
 2. Glue the MAX30102 face-down over the floor window so the sensor chip is flush with the outside of the floor.
-3. Slide the LiPo between the rails; add a strip of foam tape on top.
+3. Slide the LiPo between the rails; add a strip of foam tape on top. Glue the power switch in the -Y gutter with its
+   lever in the wall slot, and the driver strip flat in the +Y gutter (transistors laid flat).
 4. Lay the ESP32 on the foam with its USB connector in the +X opening.
 5. Stick the top-layer modules into the lid with foam tape: buttons first (6 × 6 mm tactile, 7–8 mm tall,
    stems through the side holes), then DS3231, TP4056 (USB-C in the -X opening), MPU6050, buzzer, motor.
@@ -59,6 +66,7 @@ The default sizes are typical values. If a part is bigger, change these paramete
 | USB connector position / size | `usb_w`, `usb_h`, `tp_y`, `tp_w`, `tp_h` |
 | Sensor window position | `win_x`, `win_l`, `win_w` |
 | Button positions | `btn_x`, `btn_d` |
+| Power-switch slot | `sw_x`, `sw_l`, `sw_h`, `sw_z` |
 | Lid fit (too tight / loose) | `fit` (default 0.2 mm) |
 
 Then run `python hardware/enclosure/make_case.py` (needs `pip install manifold3d numpy matplotlib`).
