@@ -11,6 +11,7 @@ parameters at the top and re-run to resize.
 | `case_base_pcb.stl` + `case_lid_pcb.stl` | *Concept* (future work): one custom PCB, LiPo 402530 (`make_case_pcb.py`) | 43 × 33 × 10.3 mm | 43.6 mm |
 | `case_base_standard.stl` + `case_lid_standard.stl` | Original: ESP32 DevKit + DS3231 + TP4056, battery inside (`make_case.py`) | 64 × 46 × 27.4 mm | 58.4 mm |
 | `case_base_slim.stl` + `case_lid_slim.stl` | Original, LiPo in a strap pocket | 64 × 46 × 20.4 mm | 58.4 mm |
+| `case_base_led.stl` + `case_lid_led.stl` | Original, for **12 × 12 × 7.3 mm LED tactile buttons** (variant `led` in `make_case.py`) | 72 × 46 × 27.4 mm | 58.4 mm |
 
 The long side runs along the forearm. Both take a 22 mm Velcro or nylon sport strap.
 
@@ -91,6 +92,16 @@ The smaller cell needs the low-power firmware (deep sleep, WiFi only for alerts,
 ## Original pod (ESP32 DevKit)
 
 ![preview](preview_standard.png)
+
+### Original pod with 12 mm LED buttons (`led`)
+
+The DevKit pod for the 12 × 12 × 7.3 mm LED tactile buttons is 8 mm longer toward the -X end: **72 × 46 × 27.4 mm**.
+The base layers (sensor, battery, ESP32 with its USB opening) do not move. In the lid, the TP4056, MPU6050 and
+DS3231 slide 8 mm toward -X (the TP4056's USB-C opening moves with them, 1.6 mm toward the centre), the motor and
+buzzer move into the freed space, and the two LED buttons sit side by side at the +X end, glued under the lid with
+their lit actuators through 7.6 mm square holes. There are no side-button holes, and the power-switch slot moves
+to x = −26 mm so it stays clear of the strap. A solid-model check of all 13 parts found no collisions. The same
+LED-wiring and measuring notes as the compact LED pod apply.
 
 ## Printing (both pods)
 

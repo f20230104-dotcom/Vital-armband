@@ -68,7 +68,13 @@ P = dict(
     # strap bars for a 22 mm strap on both long sides
     strap_w=22.0, bar_out=6.0, bar_gap=3.2, bar_d=3.0, bar_cheek=3.0, bar_h=6.0,
 )
-VARIANTS = {"standard": {}, "slim": {"battery_h": 0.0, "gap_h": 0.0}}
+# "led": for the 12 x 12 x 7.3 mm LED tactile buttons (e.g. the 5-colour LED kit). The case is 8 mm longer
+# toward -X (the ESP32 and its USB opening stay put); in the lid the TP4056, MPU6050 and DS3231 move 8 mm toward
+# -X, the motor and buzzer move into the freed space, and the two LED buttons sit at the +X end, glued under the
+# lid with their lit actuators through square holes. No side-button holes.
+VARIANTS = {"standard": {}, "slim": {"battery_h": 0.0, "gap_h": 0.0},
+            "led": {"inner_l": 68.0, "x_shift": -4.0, "btn_x": (), "led_xy": ((21.4, 12.5), (21.4, -12.5)),
+                    "led_sq": 7.6, "buzz_x": 8.0, "buzz_y": 13.0, "sw_x": -26.0, "tp_y": -9.5}}
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -111,6 +117,7 @@ def write_stl(m: Manifold, path: Path):
 def build(p: dict):
     L, W = p["inner_l"] + 2 * p["wall"], p["inner_w"] + 2 * p["wall"]
     R = p["inner_r"] + p["wall"]
+    xs = p.get("x_shift", 0.0)                               # shell offset along X (features stay put)
     depth = p["battery_h"] + p["gap_h"] + p["esp32_h"]
     hb = p["floor"] + depth                                  # base height
     c = p["chamfer"]
@@ -120,7 +127,7 @@ def build(p: dict):
                                  rrect(L, W, R).extrude(c).translate([0, 0, 0])]) + \
         rrect(L, W, R).extrude(hb - c).translate([0, 0, c])
     cavity = rrect(p["inner_l"], p["inner_w"], p["inner_r"]).extrude(hb).translate([0, 0, p["floor"]])
-    base = shell - cavity
+    base = (shell - cavity).translate([xs, 0, 0])
 
     # sensor window through the floor
     base -= rrect(p["win_l"], p["win_w"], 1.5).extrude(p["floor"] + 2).translate([p["win_x"], 0, -1])
@@ -137,7 +144,7 @@ def build(p: dict):
 
     # ESP32 USB opening in the +X wall, centred on the board's height
     board_z = p["floor"] + p["battery_h"] + p["gap_h"]
-    base -= box(L / 2 - p["wall"] - 1, L / 2 + 1, -p["usb_w"] / 2, p["usb_w"] / 2,
+    base -= box(xs + L / 2 - p["wall"] - 1, xs + L / 2 + 1, -p["usb_w"] / 2, p["usb_w"] / 2,
                 board_z - 0.5, min(board_z - 0.5 + p["usb_h"], hb - 1.5))
 
     # slide-switch lever slot in the -Y wall
@@ -150,12 +157,12 @@ def build(p: dict):
         y_wall = s * (W / 2 - 0.5)
         y_end = s * (W / 2 + out)
         y0, y1 = min(y_wall, y_end), max(y_wall, y_end)
-        for xs in (-1, 1):
-            x_in = xs * sw / 2
-            x_out = xs * (sw / 2 + p["bar_cheek"])
+        for k in (-1, 1):
+            x_in = xs + k * sw / 2
+            x_out = xs + k * (sw / 2 + p["bar_cheek"])
             base += box(min(x_in, x_out), max(x_in, x_out), y0, y1, 0, p["bar_h"])
         bar_y = s * (W / 2 + gap + p["bar_d"] / 2)
-        base += cyl_x(bar_y, p["bar_h"] / 2, p["bar_d"], -sw / 2 - 0.5, sw / 2 + 0.5)
+        base += cyl_x(bar_y, p["bar_h"] / 2, p["bar_d"], xs - sw / 2 - 0.5, xs + sw / 2 + 0.5)
 
     # ---- lid (assembly frame: sits on top of the base at z = hb)
     ht = p["top_h"]
@@ -164,18 +171,23 @@ def build(p: dict):
     ri_l, ri_w = p["inner_l"] - 2 * p["fit"], p["inner_w"] - 2 * p["fit"]
     li_l, li_w = ri_l - 2 * p["rim_t"], ri_w - 2 * p["rim_t"]
     lid = rrect(L, W, R).extrude(ht + p["lid_top"]).translate([0, 0, hb]) - \
-        rrect(li_l, li_w, max(0.5, p["inner_r"] - p["fit"] - p["rim_t"])).extrude(ht).translate([0, 0, hb - 0.01])
+        rrect(li_l, li_w, max(0.5, p["inner_r"] - p["fit"] - p["rim_t"])).extrude(ht + 0.01).translate([0, 0, hb - 0.01])
     rim = rrect(ri_l, ri_w, p["inner_r"] - p["fit"]).extrude(p["rim_h"] + 0.01) - \
         rrect(ri_l - 2 * p["rim_t"], ri_w - 2 * p["rim_t"], max(0.5, p["inner_r"] - p["fit"] - p["rim_t"])).extrude(p["rim_h"] + 1).translate([0, 0, -0.5])
     lid += rim.translate([0, 0, hb - p["rim_h"]])
+    lid = lid.translate([xs, 0, 0])
     # notch the rim where the ESP32 USB opening is, so the plug clears it
-    lid -= box(L / 2 - p["wall"] - p["rim_t"] - 1, L / 2, -p["usb_w"] / 2 - 1, p["usb_w"] / 2 + 1, hb - p["rim_h"] - 1, hb + 0.01)
+    lid -= box(xs + L / 2 - p["wall"] - p["rim_t"] - 1, xs + L / 2, -p["usb_w"] / 2 - 1, p["usb_w"] / 2 + 1, hb - p["rim_h"] - 1, hb + 0.01)
     # TP4056 USB-C opening in the -X end of the skirt
-    lid -= box(-L / 2 - 1, -li_l / 2 + 1, p["tp_y"] - p["tp_w"] / 2, p["tp_y"] + p["tp_w"] / 2,
+    lid -= box(xs - L / 2 - 1, xs - li_l / 2 + 1, p["tp_y"] - p["tp_w"] / 2, p["tp_y"] + p["tp_w"] / 2,
                hb + 1.0, hb + 1.0 + p["tp_h"])
     # side buttons on the +Y skirt
     for bx in p["btn_x"]:
         lid -= cyl_y(bx, hb + ht / 2, p["btn_d"], li_w / 2 - 1, W / 2 + 1)
+    # top-press LED buttons: square holes for their lit actuators
+    for lx, ly in p.get("led_xy", ()):
+        q = p["led_sq"] / 2
+        lid -= box(lx - q, lx + q, ly - q, ly + q, hb + ht - 1, hb + ht + p["lid_top"] + 1)
     # buzzer holes (hex pattern of 7)
     zt = hb + ht - 1
     pts = [(0, 0)] + [(3.2 * np.cos(a), 3.2 * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 7)[:-1]]
@@ -258,11 +270,16 @@ def main():
         write_stl(base, OUT / f"case_base_{name}.stl")
         write_stl(lid_print, OUT / f"case_lid_{name}.stl")
         bbb = base.bounding_box()
-        report.append(f"{name:<8} pod {bbb[3] - bbb[0]:.1f} x {p['inner_w'] + 2 * p['wall']:.1f} mm "
+        report.append(f"{name:<8} pod {p['inner_l'] + 2 * p['wall']:.1f} x {p['inner_w'] + 2 * p['wall']:.1f} mm "
                       f"(across wrist incl. strap bars {bbb[4] - bbb[1]:.1f} mm), height {htot:.1f} mm; "
                       f"base {base.volume() / 1000:.1f} cm3, lid {lid.volume() / 1000:.1f} cm3, genus {base.genus()}/{lid.genus()}")
-        if name == "standard":
-            preview(base, lid, OUT / "preview_standard.png")
+        if name == "led":
+            preview(base, lid, OUT / "preview_led.png", titles=(
+                "Exploded view (DevKit pod, 12 mm LED buttons)", "Base from the skin side: sensor window, chamfer, strap bars",
+                "Base, inside: battery rails, USB opening (+X)", "Lid, inside: square LED-button holes, buzzer holes, USB-C (-X)"))
+        if name in ("standard", "led"):
+            if name == "standard":
+                preview(base, lid, OUT / "preview_standard.png")
             # assembled-frame meshes (lid in place, not flipped) for the 3D assembly viewer, as a
             # script so viewer/index.html also works when opened straight from disk
             import base64
@@ -270,8 +287,9 @@ def main():
             import re
             js = OUT / "viewer" / "case_meshes.js"
             entries = dict(re.findall(r'(\w+): "([A-Za-z0-9+/=]*)"', js.read_text())) if js.exists() else {}
-            entries.update({k: base64.b64encode(stl_bytes(m)).decode() for k, m in (("base", base), ("lid", lid))})
-            js.write_text("// generated by make_case.py / make_case_xiao.py - binary STL (assembled frame, mm), base64\n"
+            keys = ("base", "lid") if name == "standard" else ("dbase", "dlid")
+            entries.update({k: base64.b64encode(stl_bytes(m)).decode() for k, m in zip(keys, (base, lid))})
+            js.write_text("// generated by make_case*.py - binary STL (assembled frame, mm), base64\n"
                           "window.CASE_MESHES = {" + ", ".join(f'{k}: "{v}"' for k, v in entries.items()) + "};\n")
     print("\n".join(report))
 
