@@ -7,6 +7,7 @@ parameters at the top and re-run to resize.
 | Files | Pod | Size (L × W × H) | Across wrist (with strap bars) |
 |---|---|---|---|
 | `case_base_xiao.stl` + `case_lid_xiao.stl` | **Compact**: Seeed XIAO ESP32-S3, battery inside (`make_case_xiao.py`) | **48 × 34 × 19.4 mm** | 46.4 mm |
+| `case_base_xiao_led.stl` + `case_lid_xiao_led.stl` | Compact, for **12 × 12 × 7.3 mm LED tactile buttons** (variant `xiao_led` in `make_case_xiao.py`) | 52 × 34 × 19.4 mm | 46.4 mm |
 | `case_base_pcb.stl` + `case_lid_pcb.stl` | *Concept* (future work): one custom PCB, LiPo 402530 (`make_case_pcb.py`) | 43 × 33 × 10.3 mm | 43.6 mm |
 | `case_base_standard.stl` + `case_lid_standard.stl` | Original: ESP32 DevKit + DS3231 + TP4056, battery inside (`make_case.py`) | 64 × 46 × 27.4 mm | 58.4 mm |
 | `case_base_slim.stl` + `case_lid_slim.stl` | Original, LiPo in a strap pocket | 64 × 46 × 20.4 mm | 58.4 mm |
@@ -54,6 +55,20 @@ Assembly:
    `IMU_AXIS_SIGN` and `TIME_ZONE` in `include/config.h`.
 
 The XIAO charges at about 100 mA (≈ 5 h for 500 mAh) and only with the power switch on.
+
+### Compact pod with 12 mm LED buttons (`xiao_led`)
+
+For the 12 × 12 × 7.3 mm LED tactile buttons (for example the 5-colour LED kit), the case is 4 mm longer toward
+the +X end: **52 × 34 × 19.4 mm**. The two buttons sit side by side across that end, glued straight under the lid,
+with their lit square actuators through 7.6 mm square holes (about 1.4 mm above the lid). The vibration motor and
+the buzzer move next to the XIAO; everything else is the same as the compact pod. `assembly_xiao.py` checks both
+variants (no overlaps) and writes `assembly_xiao_led.glb`.
+
+* Measure your buttons first: the body height (default `btn_body_h=4.3`) and the actuator size (`btn_act=7.0`,
+  hole `btn_sq=7.6`) are typical values, not from the listing.
+* Bend the 4 switch legs and 2 LED legs flat, sideways, before gluing.
+* The LEDs are rated for 12 V. Try one on 3.3 V through 100 Ω: if it lights well, wire it to a spare XIAO pin
+  (D6 or D7) through 100 Ω; if it is too dim it has a built-in resistor, so leave the LED pins unconnected.
 
 ## Custom-PCB concept (future work)
 

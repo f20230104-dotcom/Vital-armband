@@ -54,28 +54,45 @@ P = dict(
     buzz_x=16.1, buzz_y=-3.5, buzz_hole=1.4,
     # strap bars for a 22 mm strap on both long sides
     strap_w=22.0, bar_out=6.0, bar_gap=3.2, bar_d=3.0, bar_cheek=3.0, bar_h=6.0,
+    # shift of the shell along X relative to the parts (lets a longer case grow toward +X only)
+    x_shift=0.0,
+    # button hole: btn_sq > 0 makes a square hole of that size instead of the round btn_d hole
+    btn_sq=0.0,
+    # parts used by assembly_xiao.py: motor position and the button (body size, body height, total height, actuator)
+    motor_xy=(7.0, -8.5), btn_body=6.0, btn_body_h=3.5, btn_total_h=7.3, btn_act=3.4,
 )
+
+# Variants. "xiao_led" takes the 12 x 12 x 7.3 mm LED tactile buttons (e.g. the 5-colour LED kit): the case
+# grows 4 mm toward +X, the two buttons sit side by side across the +X end with their lit square actuators
+# through square holes in the lid, and the motor and buzzer move next to the XIAO.
+VARIANTS = {
+    "xiao": {},
+    "xiao_led": dict(inner_l=48.0, x_shift=2.0, btn_xy=((16.4, 6.8), (16.4, -6.8)), btn_sq=7.6, boss_h=0.0,
+                     buzz_x=4.8, buzz_y=5.0, motor_xy=(4.5, -8.0),
+                     btn_body=12.0, btn_body_h=4.3, btn_total_h=7.3, btn_act=7.0),
+}
 
 
 def build(p: dict):
     L, W = p["inner_l"] + 2 * p["wall"], p["inner_w"] + 2 * p["wall"]
     R = p["inner_r"] + p["wall"]
+    xs = p["x_shift"]
     hb = p["floor"] + p["skin_h"] + p["foam_h"] + p["battery_h"]        # base height
     c = p["chamfer"]
 
     # ---- base: chamfered skin-side edges
     shell = Manifold.batch_hull([rrect(L - 2 * c, W - 2 * c, R - c).extrude(0.01),
                                  rrect(L, W, R).extrude(c)]) + rrect(L, W, R).extrude(hb - c).translate([0, 0, c])
-    base = shell - rrect(p["inner_l"], p["inner_w"], p["inner_r"]).extrude(hb).translate([0, 0, p["floor"]])
+    base = (shell - rrect(p["inner_l"], p["inner_w"], p["inner_r"]).extrude(hb).translate([0, 0, p["floor"]])).translate([xs, 0, 0])
     base -= rrect(p["win_l"], p["win_w"], 1.5).extrude(p["floor"] + 2).translate([p["win_x"], p["win_y"], -1])
     base -= box(p["sw_x"] - p["sw_l"] / 2, p["sw_x"] + p["sw_l"] / 2, -W / 2 - 1, -W / 2 + p["wall"] + 1,
                 p["sw_z"] - p["sw_h"] / 2, p["sw_z"] + p["sw_h"] / 2)
     sw, out, gap = p["strap_w"] + 1.0, p["bar_out"], p["bar_gap"]
     for s in (1, -1):
         y0, y1 = sorted((s * (W / 2 - 0.5), s * (W / 2 + out)))
-        for xs in (-1, 1):
-            base += box(*sorted((xs * sw / 2, xs * (sw / 2 + p["bar_cheek"]))), y0, y1, 0, p["bar_h"])
-        base += cyl_x(s * (W / 2 + gap + p["bar_d"] / 2), p["bar_h"] / 2, p["bar_d"], -sw / 2 - 0.5, sw / 2 + 0.5)
+        for k in (-1, 1):
+            base += box(*sorted((xs + k * sw / 2, xs + k * (sw / 2 + p["bar_cheek"]))), y0, y1, 0, p["bar_h"])
+        base += cyl_x(s * (W / 2 + gap + p["bar_d"] / 2), p["bar_h"] / 2, p["bar_d"], xs - sw / 2 - 0.5, xs + sw / 2 + 0.5)
 
     # ---- lid (assembly frame, sits on the base at z = hb)
     ht, ceil = p["top_h"], hb + p["top_h"]
@@ -87,17 +104,23 @@ def build(p: dict):
     rim = rrect(ri_l, ri_w, p["inner_r"] - p["fit"]).extrude(p["rim_h"] + 0.01) - \
         rrect(li_l, li_w, r_in).extrude(p["rim_h"] + 1).translate([0, 0, -0.5])
     lid += rim.translate([0, 0, hb - p["rim_h"]])
+    lid = lid.translate([xs, 0, 0])
     # thin the -X wall around the USB-C port, then cut the port (rounded slot)
-    x_pocket = -L / 2 + p["usb_wall"]
-    lid -= box(x_pocket, -li_l / 2 + 0.5, p["usb_y"] - p["usb_pocket_w"] / 2, p["usb_y"] + p["usb_pocket_w"] / 2,
+    x_pocket = xs - L / 2 + p["usb_wall"]
+    lid -= box(x_pocket, xs - li_l / 2 + 0.5, p["usb_y"] - p["usb_pocket_w"] / 2, p["usb_y"] + p["usb_pocket_w"] / 2,
                hb - p["rim_h"] - 1, ceil - 0.01)
     port = rrect(p["usb_h"], p["usb_w"], p["usb_h"] / 2 - 0.01).extrude(p["usb_wall"] + 2).rotate([0, 90, 0])
-    lid -= port.translate([-L / 2 - 1, p["usb_y"], p["usb_z"]])
+    lid -= port.translate([xs - L / 2 - 1, p["usb_y"], p["usb_z"]])
     # button bosses on the ceiling, then the button holes through boss + top
     for bx, by in p["btn_xy"]:
-        lid += box(bx - p["boss"] / 2, bx + p["boss"] / 2, by - p["boss"] / 2, by + p["boss"] / 2, ceil - p["boss_h"], ceil + 0.01)
-        lid -= Manifold.cylinder(p["boss_h"] + p["lid_top"] + 2, p["btn_d"] / 2, circular_segments=40).translate(
-            [bx, by, ceil - p["boss_h"] - 1])
+        if p["boss_h"] > 0:
+            lid += box(bx - p["boss"] / 2, bx + p["boss"] / 2, by - p["boss"] / 2, by + p["boss"] / 2, ceil - p["boss_h"], ceil + 0.01)
+        if p["btn_sq"] > 0:
+            q = p["btn_sq"] / 2
+            lid -= box(bx - q, bx + q, by - q, by + q, ceil - p["boss_h"] - 1, ceil + p["lid_top"] + 1)
+        else:
+            lid -= Manifold.cylinder(p["boss_h"] + p["lid_top"] + 2, p["btn_d"] / 2, circular_segments=40).translate(
+                [bx, by, ceil - p["boss_h"] - 1])
     # buzzer sound holes (hex pattern of 7)
     pts = [(0, 0)] + [(2.6 * np.cos(a), 2.6 * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 7)[:-1]]
     for dx, dy in pts:
@@ -106,32 +129,44 @@ def build(p: dict):
     return base, lid, hb, ceil + p["lid_top"]
 
 
-def main():
-    base, lid, hb, htot = build(P)
-    for label, part in (("base", base), ("lid", lid)):
-        assert part.status().name == "NoError", part.status()
-        assert len(part.decompose()) == 1, f"xiao {label} is not one piece - check the geometry"
-    assert (base ^ lid).volume() < 1e-3, "base and lid overlap"
-    lid_print = lid.rotate([180, 0, 0])
-    lid_print = lid_print.translate([0, 0, -lid_print.bounding_box()[2]])
-    write_stl(base, OUT / "case_base_xiao.stl")
-    write_stl(lid_print, OUT / "case_lid_xiao.stl")
-    preview(base, lid, OUT / "preview_xiao.png", titles=(
+OUTPUTS = {  # variant -> (file suffix, viewer mesh keys, preview titles)
+    "xiao": ("xiao", ("xbase", "xlid"), (
         "Exploded view (XIAO compact pod)", "Base from the skin side: sensor window, switch slot, strap bars",
-        "Base, inside: skin layer + battery bay", "Lid, inside: button bosses, buzzer holes, USB-C (-X)"))
+        "Base, inside: skin layer + battery bay", "Lid, inside: button bosses, buzzer holes, USB-C (-X)")),
+    "xiao_led": ("xiao_led", ("lbase", "llid"), (
+        "Exploded view (XIAO pod, 12 mm LED buttons)", "Base from the skin side: sensor window, switch slot, strap bars",
+        "Base, inside: skin layer + battery bay", "Lid, inside: square LED-button holes, buzzer holes, USB-C (-X)")),
+}
 
-    # add the assembled meshes to the 3D viewer's mesh file (keys xbase / xlid)
+
+def variant(name: str) -> dict:
+    return {**P, **VARIANTS[name]}
+
+
+def main():
     js = OUT / "viewer" / "case_meshes.js"
     entries = dict(re.findall(r'(\w+): "([A-Za-z0-9+/=]*)"', js.read_text())) if js.exists() else {}
-    entries["xbase"] = base64.b64encode(stl_bytes(base)).decode()
-    entries["xlid"] = base64.b64encode(stl_bytes(lid)).decode()
-    js.write_text("// generated by make_case.py / make_case_xiao.py - binary STL (assembled frame, mm), base64\n"
+    for name in VARIANTS:
+        p = variant(name)
+        suffix, keys, titles = OUTPUTS[name]
+        base, lid, hb, htot = build(p)
+        for label, part in (("base", base), ("lid", lid)):
+            assert part.status().name == "NoError", part.status()
+            assert len(part.decompose()) == 1, f"{name} {label} is not one piece - check the geometry"
+        assert (base ^ lid).volume() < 1e-3, "base and lid overlap"
+        lid_print = lid.rotate([180, 0, 0])
+        lid_print = lid_print.translate([0, 0, -lid_print.bounding_box()[2]])
+        write_stl(base, OUT / f"case_base_{suffix}.stl")
+        write_stl(lid_print, OUT / f"case_lid_{suffix}.stl")
+        preview(base, lid, OUT / f"preview_{suffix}.png", titles=titles)
+        entries[keys[0]] = base64.b64encode(stl_bytes(base)).decode()
+        entries[keys[1]] = base64.b64encode(stl_bytes(lid)).decode()
+        bb = base.bounding_box()
+        print(f"{name:<9} pod {p['inner_l'] + 2 * p['wall']:.1f} x {p['inner_w'] + 2 * p['wall']:.1f} mm "
+              f"(across wrist incl. strap bars {bb[4] - bb[1]:.1f} mm), height {htot:.1f} mm (base {hb:.1f}); "
+              f"base {base.volume() / 1000:.1f} cm3, lid {lid.volume() / 1000:.1f} cm3, genus {base.genus()}/{lid.genus()}")
+    js.write_text("// generated by make_case*.py - binary STL (assembled frame, mm), base64\n"
                   "window.CASE_MESHES = {" + ", ".join(f'{k}: "{v}"' for k, v in entries.items()) + "};\n")
-
-    bb = base.bounding_box()
-    print(f"xiao pod {bb[3] - bb[0]:.1f} x {P['inner_w'] + 2 * P['wall']:.1f} mm "
-          f"(across wrist incl. strap bars {bb[4] - bb[1]:.1f} mm), height {htot:.1f} mm (base {hb:.1f}); "
-          f"base {base.volume() / 1000:.1f} cm3, lid {lid.volume() / 1000:.1f} cm3, genus {base.genus()}/{lid.genus()}")
 
 
 if __name__ == "__main__":

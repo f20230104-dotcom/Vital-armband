@@ -63,6 +63,9 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
 .sec h2 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .row > span { font-size: 13px; }
+.vrow { display: grid; gap: 6px; }
+.vrow > span { font-size: 13px; }
+.vrow .seg { flex-wrap: wrap; justify-self: start; }
 .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
 .toggles label { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
 .toggles input { accent-color: var(--accent); }
@@ -106,7 +109,7 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
 <div class="app">
   <header>
     <h1>Wrist Pod Assembly</h1>
-    <p>Every component of the Vital wristband, placed where it goes inside the case: the compact XIAO pod, the custom-PCB concept and the original DevKit pod.</p>
+    <p>Every component of the Vital wristband, placed where it goes inside the case: the compact XIAO pod (6 mm or 12 mm LED buttons), the custom-PCB concept and the original DevKit pod.</p>
     <div class="dims" id="dims"></div>
   </header>
   <main>
@@ -134,9 +137,10 @@ aside { border-left: 1px solid var(--line); background: var(--surface); overflow
     <aside>
       <section class="sec">
         <h2>Display</h2>
-        <div class="row"><span>Version</span>
+        <div class="vrow"><span>Version</span>
           <div class="seg" id="version">
             <button data-v="xiao" aria-pressed="true">XIAO</button>
+            <button data-v="xled" aria-pressed="false">XIAO · LED</button>
             <button data-v="pcb" aria-pressed="false">Custom PCB</button>
             <button data-v="devkit" aria-pressed="false">DevKit</button>
           </div>
@@ -280,6 +284,7 @@ let CUR = "devkit";                       // version the next part() / wire() ca
 const LAYERS = {
   devkit: { lid: "Lid · top layer", mid: "Base · middle layer", bot: "Base · bottom layer" },
   xiao:   { lid: "Lid · XIAO layer", mid: "Base · battery layer", bot: "Base · skin layer" },
+  xled:   { lid: "Lid · XIAO layer", mid: "Base · battery layer", bot: "Base · skin layer" },
   pcb:    { lid: "Lid · battery", mid: "Board · top side", bot: "Board · skin side" } };
 function part(def, build) {
   const g = new THREE.Group(); const mats = [];
@@ -486,7 +491,7 @@ const btns = part({ id: "buttons", name: "Tactile buttons ×2", short: "Buttons"
 });
 
 // ------------------------------------------------------------------ wires (assembled view only)
-const wiresBy = { devkit: new THREE.Group(), xiao: new THREE.Group(), pcb: new THREE.Group() }; Object.values(wiresBy).forEach(g => pod.add(g));
+const wiresBy = { devkit: new THREE.Group(), xiao: new THREE.Group(), xled: new THREE.Group(), pcb: new THREE.Group() }; Object.values(wiresBy).forEach(g => pod.add(g));
 const WC = { red: 0xd23a2c, black: 0x202020, blue: 0x2f6fd6, yellow: 0xe6b81f, green: 0x2f9e57, white: 0xe8e8e8, orange: 0xf08a24 };
 function wire(color, pts) {
   const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, "centripetal");
@@ -519,11 +524,13 @@ wire("white", [[7.5, 17.4, 4], [-6, 12, 3.2], [-7.5, -6, 3.2], [-7.6, -11, 6], [
 // ================================================================== compact version: Seeed XIAO ESP32-S3
 // numbers from make_case_xiao.py: floor 1.8, skin layer to 5.8, battery 6.3-12.1, base top 12.3,
 // lid ceiling 17.8, top 19.4; inner 44 x 30, lid inner 41.2 x 27.2
-CUR = "xiao";
 const X = { floor: 1.8, skin: 5.8, battLo: 6.3, battHi: 12.1, hb: 12.3, ceil: 17.8 };
+// o: version key, motor / buzzer centres, button centres, led = 12 x 12 LED buttons (else 6 x 6)
+function buildXiao(o) {
+CUR = o.v;
 
 // XIAO ESP32-S3, USB-C through the thinned -X wall
-part({ id: "x-xiao", name: "Seeed XIAO ESP32-S3", short: "XIAO ESP32-S3", layer: "lid", swatch: "#2b3038", ex: 30, dim: "21 × 17.8",
+part({ id: o.v + "-xiao", name: "Seeed XIAO ESP32-S3", short: "XIAO ESP32-S3", layer: "lid", swatch: "#2b3038", ex: 30, dim: "21 × 17.8",
   role: "Main controller (dual-core ESP32-S3): same firmware, and it charges the LiPo itself through its USB-C.",
   size: "21 × 17.8 mm", where: "Lid layer, on foam on top of the battery; USB-C through the thinned −X end wall (charging and flashing)",
   links: "I²C on D4/D5 · MPU INT D1 · MAX INT D2 · buttons D3/D8 · buzzer D9 and motor D10 via the driver strip · battery sense D0 · LiPo on the BAT pads under the board",
@@ -540,7 +547,7 @@ part({ id: "x-xiao", name: "Seeed XIAO ESP32-S3", short: "XIAO ESP32-S3", layer:
   for (const y of [-7.5, -4.0]) bx(g, -7, -5, y - 0.8, y + 0.8, z0 - 0.06, z0, mat(...GOLD));   // BAT+ / BAT- pads
 });
 
-part({ id: "x-antenna", name: "FPC antenna (2.4 GHz)", short: "Antenna", layer: "lid", swatch: "#c98a2b", ex: 30, dim: "≈ 17 × 6.5",
+part({ id: o.v + "-antenna", name: "FPC antenna (2.4 GHz)", short: "Antenna", layer: "lid", swatch: "#c98a2b", ex: 30, dim: "≈ 17 × 6.5",
   role: "WiFi antenna. The XIAO ESP32-S3 has no antenna on the board, so it needs this one to send alerts.",
   size: "Flat sticker, about 17 × 6.5 mm (check the one in your box)", where: "Stuck to the lid ceiling beside the XIAO, away from the battery and the metal shield",
   links: "Short coax cable to the XIAO's U.FL socket",
@@ -551,30 +558,46 @@ part({ id: "x-antenna", name: "FPC antenna (2.4 GHz)", short: "Antenna", layer: 
   g.add(new THREE.Mesh(new THREE.TubeGeometry(coax, 24, 0.45, 8, false), mat(0x1c1c1c, { r: 0.5 })));
 });
 
-part({ id: "x-motor", name: "Coin vibration motor 1027", short: "Vibration motor", layer: "lid", swatch: "#b7bdc5", ex: 30, dim: "Ø10 × 2.7",
+part({ id: o.v + "-motor", name: "Coin vibration motor 1027", short: "Vibration motor", layer: "lid", swatch: "#b7bdc5", ex: 30, dim: "Ø10 × 2.7",
   role: "Silent alert on the wrist: medication reminders and the fall cancel window.",
   size: "10 mm × 2.7 mm", where: "Lid layer, self-adhesive back on the lid ceiling",
   links: "Through Q2 on the driver strip to D10 (GPIO 9), with a 1N4148 across it",
   note: "Mounting it on the lid lets the buzz carry through the case to the wrist." }, (g, mat) => {
-  cylZ(g, 7, -8.5, X.ceil - 2.7, X.ceil, 5, mat(...SILVER), 48);
-  cylZ(g, 7, -8.5, X.ceil - 2.8, X.ceil - 2.7, 4.2, mat(0x8d939b, { m: 0.7, r: 0.4 }), 48);
+  cylZ(g, o.motor[0], o.motor[1], X.ceil - 2.7, X.ceil, 5, mat(...SILVER), 48);
+  cylZ(g, o.motor[0], o.motor[1], X.ceil - 2.8, X.ceil - 2.7, 4.2, mat(0x8d939b, { m: 0.7, r: 0.4 }), 48);
 });
 
-part({ id: "x-buzzer", name: "Buzzer 9 × 4.2 mm (9042)", short: "Buzzer", layer: "lid", swatch: "#26282c", ex: 30, dim: "Ø9 × 4.2",
+part({ id: o.v + "-buzzer", name: "Buzzer 9 × 4.2 mm (9042)", short: "Buzzer", layer: "lid", swatch: "#26282c", ex: 30, dim: "Ø9 × 4.2",
   role: "Audible alarm for falls, low SpO₂ and missed doses.",
   size: "9 mm × 4.2 mm (a 12 mm buzzer is too tall for the compact lid)", where: "Lid layer, under the seven sound holes",
   links: "Through Q1 on the driver strip to D9 (GPIO 8)", note: "Glue the rim, not the face, so the sound holes stay clear." }, (g, mat) => {
-  cylZ(g, 16.1, -3.5, X.ceil - 4.2, X.ceil - 0.3, 4.5, mat(0x26282c, { r: 0.5 }), 40);
-  cylZ(g, 16.1, -3.5, X.ceil - 0.3, X.ceil, 4.0, mat(0x1a1b1e, { r: 0.4 }), 40);
+  cylZ(g, o.buzz[0], o.buzz[1], X.ceil - 4.2, X.ceil - 0.3, 4.5, mat(0x26282c, { r: 0.5 }), 40);
+  cylZ(g, o.buzz[0], o.buzz[1], X.ceil - 0.3, X.ceil, 4.0, mat(0x1a1b1e, { r: 0.4 }), 40);
 });
 
-part({ id: "x-buttons", name: "Tactile buttons ×2 (top-press)", short: "Buttons", layer: "lid", swatch: "#3c3f45", ex: 30, dim: "6 × 6",
+part(o.led ? { id: o.v + "-buttons", name: "LED tactile buttons ×2 (12 × 12 mm)", short: "LED buttons", layer: "lid", swatch: "#d23a2c", ex: 30, dim: "12 × 12",
+  role: "A: cancel a fall alert, hold 2 s for SOS. B: confirm a medication dose or cancel. The lit actuators show through the lid.",
+  size: "12 × 12 × 7.3 mm, built-in LED (from the 5-colour kit)", where: "Lid layer, +X end, side by side; glued to the ceiling, actuators through square holes",
+  links: "Switch: A to D3 (GPIO 4), B to D8 (GPIO 7), other leg to GND. LED: optional, see the note",
+  note: "The LEDs are rated for 12 V. Try each on 3.3 V through 100 Ω first: if it is too dim it has a built-in resistor, so leave the LED pins unconnected." }
+  : { id: o.v + "-buttons", name: "Tactile buttons ×2 (top-press)", short: "Buttons", layer: "lid", swatch: "#3c3f45", ex: 30, dim: "6 × 6",
   role: "A: cancel a fall alert, hold 2 s for SOS. B: confirm a medication dose or cancel.",
   size: "6 × 6 mm, 7–8 mm tall", where: "Lid layer, glued under the two bosses; the stems poke 1 mm through the top",
   links: "Button A to D3 (GPIO 4), Button B to D8 (GPIO 7); the other leg to GND",
   note: "Bend the four legs flat before gluing so they clear the battery underneath." }, (g, mat) => {
+  if (o.led) {
+    const top = X.ceil;                                       // body glued straight under the lid
+    o.btn.forEach(([x, y], i) => {
+      bx(g, x - 6, x + 6, y - 6, y + 6, top - 4.3, top - 0.4, mat(0x2b2d31, { r: 0.6 }));
+      bx(g, x - 6, x + 6, y - 6, y + 6, top - 0.4, top, mat(...SILVER));
+      bx(g, x - 3.5, x + 3.5, y - 3.5, y + 3.5, top, top + 3.0, mat(i ? 0x37c26a : 0xe0463a, { r: 0.35 }));
+      for (const sx of [-1, 1]) for (const dy of [-3.75, 0, 3.75])
+        bx(g, ...(sx < 0 ? [x - 7.2, x - 6] : [x + 6, x + 7.2]), y + dy - 0.3, y + dy + 0.3, top - 4.3, top - 4.0, mat(...SILVER));
+    });
+    return;
+  }
   const top = X.ceil - 1.2;                                   // underside of the boss
-  for (const [x, y] of [[6.5, 8.5], [14.5, 8.5]]) {
+  for (const [x, y] of o.btn) {
     bx(g, x - 3, x + 3, y - 3, y + 3, top - 3.5, top - 0.3, mat(0x2b2d31, { r: 0.6 }));
     bx(g, x - 3, x + 3, y - 3, y + 3, top - 0.3, top, mat(...SILVER));
     cylZ(g, x, y, top, top + 3.8, 1.7, mat(0x3c3f45, { r: 0.5 }), 28);
@@ -583,7 +606,7 @@ part({ id: "x-buttons", name: "Tactile buttons ×2 (top-press)", short: "Buttons
 });
 
 // battery layer
-part({ id: "x-lipo", name: "LiPo 602535 (3.7 V)", short: "LiPo", layer: "mid", swatch: "#a9b4c0", ex: 12, dim: "35 × 25 × 6",
+part({ id: o.v + "-lipo", name: "LiPo 602535 (3.7 V)", short: "LiPo", layer: "mid", swatch: "#a9b4c0", ex: 12, dim: "35 × 25 × 6",
   role: "Power: about 400–500 mAh, roughly 9–12 h of runtime with WiFi bursts.",
   size: "35 × 25 × 6 mm pouch", where: "Centre of the pod on foam tape, between the skin layer and the XIAO",
   links: "Red lead through the power switch to the XIAO's BAT+ pad; black lead to BAT−",
@@ -596,7 +619,7 @@ part({ id: "x-lipo", name: "LiPo 602535 (3.7 V)", short: "LiPo", layer: "mid", s
     c.fillText("Li-polymer · PCM protected", 34, 260); c.fillText("Do not puncture or short", 34, 310);
     c.strokeStyle = "#fff"; c.lineWidth = 4; c.strokeRect(18, 18, w - 36, h - 36); }));
 });
-part({ id: "x-foam", name: "Foam tape spacers", short: "Foam", layer: "mid", swatch: "#e7e2d4", ex: 12, dim: "0.5–0.7", nolabel: true,
+part({ id: o.v + "-foam", name: "Foam tape spacers", short: "Foam", layer: "mid", swatch: "#e7e2d4", ex: 12, dim: "0.5–0.7", nolabel: true,
   role: "Double-sided foam tape that holds the stack still and insulates the boards.",
   size: "0.5 mm under the battery, 0.7 mm under the XIAO", where: "Skin layer to battery, battery to XIAO",
   links: "None", note: "Use foam rather than hot glue on the LiPo: heat and pressure on the pouch are both bad." }, (g, mat) => {
@@ -606,7 +629,7 @@ part({ id: "x-foam", name: "Foam tape spacers", short: "Foam", layer: "mid", swa
 });
 
 // skin layer
-part({ id: "x-max", name: "MAX30102 pulse-oximeter", short: "MAX30102", layer: "bot", swatch: "#5b2c86", ex: 3, dim: "20 × 15",
+part({ id: o.v + "-max", name: "MAX30102 pulse-oximeter", short: "MAX30102", layer: "bot", swatch: "#5b2c86", ex: 3, dim: "20 × 15",
   role: "Optical sensor for heart rate, SpO₂ and breathing rate.",
   size: "≈ 20 × 15 mm board, 5.6 × 3.3 mm sensor chip", where: "Skin layer, glued face-down over the floor window (the −X half)",
   links: "I²C address 0x57; INT to D2 (GPIO 3); 3.3 V from the XIAO",
@@ -619,7 +642,7 @@ part({ id: "x-max", name: "MAX30102 pulse-oximeter", short: "MAX30102", layer: "
   bx(g, -6, -3.5, 3.5, 5.5, X.floor + 1.6, X.floor + 2.7, mat(0x111111, { r: 0.4 }));
   holes(g, [[-1.8, -3.8], [-1.8, -1.27], [-1.8, 1.27], [-1.8, 3.8]], X.floor - 0.05, X.floor + 1.65, mat(...GOLD), 0.6);
 });
-part({ id: "x-mpu", name: "MPU6050 (GY-521)", short: "MPU6050", layer: "bot", swatch: "#2a5fae", ex: 3, dim: "20.3 × 15.6",
+part({ id: o.v + "-mpu", name: "MPU6050 (GY-521)", short: "MPU6050", layer: "bot", swatch: "#2a5fae", ex: 3, dim: "20.3 × 15.6",
   role: "Accelerometer and gyroscope that feed the fall detector at 50 Hz.",
   size: "20.3 × 15.6 mm board", where: "Skin layer, glued flat to the floor (+X half), chip up",
   links: "I²C address 0x69 (AD0 tied to 3.3 V); INT to D1 (GPIO 2)",
@@ -632,7 +655,7 @@ part({ id: "x-mpu", name: "MPU6050 (GY-521)", short: "MPU6050", layer: "bot", sw
   const pins = []; for (let i = 0; i < 8; i++) pins.push([2.0 + i * 2.54, -13.4]);
   holes(g, pins, z0 - 0.05, z1 + 0.05, mat(...GOLD), 0.6);
 });
-part({ id: "x-driver", name: "Driver strip (perfboard)", short: "Driver strip", layer: "bot", swatch: "#c4954a", ex: 3, dim: "20 × 12.6",
+part({ id: o.v + "-driver", name: "Driver strip (perfboard)", short: "Driver strip", layer: "bot", swatch: "#c4954a", ex: 3, dim: "20 × 12.6",
   role: "The small parts: transistor drivers for the buzzer and motor, and the battery divider.",
   size: "20 × 12.6 mm perfboard, parts under 2.5 mm tall", where: "Skin layer, beside the MPU6050",
   links: "Q1/Q2 BC547 + 1 kΩ for buzzer (D9) and motor (D10) · 1N4148 across the motor · 100k/100k divider from BAT+ to D0",
@@ -650,7 +673,7 @@ part({ id: "x-driver", name: "Driver strip (perfboard)", short: "Driver strip", 
   res(9.7, 5.4, 0xd8c39b); res(4.5, 11.2, 0xd8c39b); res(14.4, 11.2, 0x6f9fd8); res(18.1, 11.2, 0x6f9fd8);
   cylX(g, 11.2, z + 0.9, 8.0, 11.4, 0.9, mat(0xe0773a, { r: 0.2 })); cylX(g, 11.2, z + 0.9, 10.7, 11.2, 0.93, black);
 });
-part({ id: "x-switch", name: "Slide power switch SS12D00", short: "Power switch", layer: "bot", swatch: "#8e959e", ex: 3, dim: "8.6 × 3.6",
+part({ id: o.v + "-switch", name: "Slide power switch SS12D00", short: "Power switch", layer: "bot", swatch: "#8e959e", ex: 3, dim: "8.6 × 3.6",
   role: "Turns the band off for storage.",
   size: "8.6 × 3.6 × 3.5 mm body, 4 mm lever", where: "Skin layer, −Y corner; lever through the slot in the −Y wall (outside the strap)",
   links: "In the red battery lead, between the LiPo and the XIAO's BAT+ pad",
@@ -671,11 +694,14 @@ wire("black", [[-15.58, -12.9, 13.9], [-14.6, -14.5, 12], [-5, -14.6, 8.6], [1.6
 [["red", 2.0, -3.8], ["black", 4.54, 3.8], ["yellow", 7.08, -1.27], ["blue", 9.62, 1.27]].forEach(([c, x, y]) =>
   wire(c, [[x, -13.4, 3.5], [x - 0.5, -11.5, 4.9], [0.1, -8, 5.1], [0.1, y, 4.6], [-1.8, y, 3.5]]));
 wire("white", [[19.78, -13.4, 3.5], [20.8, -10, 5], [21, 0, 9], [12, 7.8, 12.4], [-16.58, 3.5, 13.9]]);
-wire("black", [[16.6, -2, 13.6], [19.8, 0.5, 12], [20.7, 6, 7], [15, 8.6, 4.6], [5.5, 7.4, 3.9]]);
-wire("blue",  [[7, -8.5, 15.0], [12, -11, 13.2], [19.6, -10.5, 12.2], [20.8, 3, 7], [15.2, 7.8, 4.4]]);
-wire("green", [[6.5, 6.4, 13.2], [2, 5.5, 13.4], [-6, 4.6, 13.8], [-11.5, 3.6, 13.9]]);
-wire("white", [[14.5, 6.4, 13.2], [6, -1, 12.6], [-2, -9, 12.6], [-6.42, -12.9, 13.4]]);
+wire("black", [[o.buzz[0] + 0.5, o.buzz[1] + 1.5, 13.6], [19.8, 0.5, 12], [20.7, 6, 7], [15, 8.6, 4.6], [5.5, 7.4, 3.9]]);
+wire("blue",  [[o.motor[0], o.motor[1], 15.0], [12, -11, 13.2], [19.6, -10.5, 12.2], [20.8, 3, 7], [15.2, 7.8, 4.4]]);
+wire("green", [[o.btn[0][0], o.btn[0][1] - (o.led ? 6.3 : 2.1), o.led ? 13.6 : 13.2], [2, 5.5, 13.4], [-6, 4.6, 13.8], [-11.5, 3.6, 13.9]]);
+wire("white", [[o.btn[1][0], o.btn[1][1] + (o.led ? 6.3 : -2.1), o.led ? 13.6 : 13.2], [6, -1, 12.6], [-2, -9, 12.6], [-6.42, -12.9, 13.4]]);
 wire("white", [[16.3, 12.4, 3.8], [11, 14.3, 6], [-6, 14.3, 10.5], [-16, 11, 12.6], [-19.12, 3.6, 13.9]]);
+}
+buildXiao({ v: "xiao", motor: [7, -8.5], buzz: [16.1, -3.5], btn: [[6.5, 8.5], [14.5, 8.5]], led: false });
+buildXiao({ v: "xled", motor: [4.5, -8.0], buzz: [4.8, 5.0], btn: [[16.4, 6.8], [16.4, -6.8]], led: true });
 
 // ================================================================== concept: one custom PCB (make_case_pcb.py)
 // Parts come from pcb_parts.js (solids exported by the script, so the viewer and the fit check match).
@@ -691,6 +717,9 @@ const VARIANTS = {
   xiao:   { dims: ["48 × 34 × 19.4 mm", "46.4 mm across wrist", "22 mm strap"], lidEx: 48, barY: 21.7, strapT0: 30,
             stack: [["Floor", 1.8, "#6c7f96"], ["Sensors", 4, "#5b2c86"], ["Foam", 0.5, "#bdb6a2"], ["Battery", 6, "#8d9bab"], ["Top layer", 5.5, "#2b3038"], ["Lid", 1.6, "#9a6a1e"]],
             total: "19.4 mm", src: "make_case_xiao.py" },
+  xled:   { dims: ["52 × 34 × 19.4 mm", "46.4 mm across wrist", "LED buttons"], lidEx: 48, barY: 21.7, strapT0: 30, strapX: 2,
+            stack: [["Floor", 1.8, "#6c7f96"], ["Sensors", 4, "#5b2c86"], ["Foam", 0.5, "#bdb6a2"], ["Battery", 6, "#8d9bab"], ["Top layer", 5.5, "#2b3038"], ["Lid", 1.6, "#9a6a1e"]],
+            total: "19.4 mm", src: "make_case_xiao.py (xiao_led)" },
   pcb:    { dims: ["43 × 33 × 10.3 mm (concept)", "43.6 mm across wrist", "22 mm strap"], lidEx: 28, barY: 20.55, strapT0: 35,
             stack: [["Floor + sensor", 1.4, "#6c7f96"], ["PCB", 1, "#1f5f3a"], ["Parts", 2.6, "#2b3038"], ["Battery", 4, "#8d9bab"], ["Gap", 0.1, "#bdb6a2"], ["Lid", 1.2, "#9a6a1e"]],
             total: "10.3 mm", src: "make_case_pcb.py (concept)" },
@@ -699,7 +728,7 @@ const VARIANTS = {
             total: "27.4 mm", src: "make_case.py (standard)" },
 };
 const caseMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0, side: THREE.DoubleSide });
-const caseParts = { devkit: {}, xiao: {}, pcb: {} };
+const caseParts = { devkit: {}, xiao: {}, xled: {}, pcb: {} };
 function parseSTL(buf) {
   const dv = new DataView(buf), n = dv.getUint32(80, true), pos = new Float32Array(n * 9);
   for (let i = 0; i < n; i++) { const o = 84 + i * 50 + 12; for (let k = 0; k < 9; k++) pos[i * 9 + k] = dv.getFloat32(o + k * 4, true); }
@@ -708,7 +737,7 @@ function parseSTL(buf) {
 async function loadCase() {
   if (!window.CASE_MESHES) throw new Error("case_meshes.js missing");
   const defs = [["devkit", "base", "base"], ["devkit", "lid", "lid"], ["xiao", "base", "xbase"], ["xiao", "lid", "xlid"],
-                ["pcb", "base", "pbase"], ["pcb", "lid", "plid"]];
+                ["xled", "base", "lbase"], ["xled", "lid", "llid"], ["pcb", "base", "pbase"], ["pcb", "lid", "plid"]];
   for (const [v, name, key] of defs) {
     if (!window.CASE_MESHES[key]) continue;
     const bin = atob(window.CASE_MESHES[key]), bytes = new Uint8Array(bin.length);
@@ -731,7 +760,7 @@ const strapBy = {};
   // cylinder axis is local Y; rotated onto world X, local X becomes world Y and local Z stays Z
   w.rotation.z = Math.PI / 2; w.scale.set(a, 1, b); w.position.set(0, 0, cz); w.receiveShadow = true; wristGrp.add(w);
   const A = a + 1.0, B = b + 1.0;
-  for (const [v, { barY: y0, strapT0 }] of Object.entries(VARIANTS)) {
+  for (const [v, { barY: y0, strapT0, strapX = 0 }] of Object.entries(VARIANTS)) {
     const half = [[y0 - 1.9, 4.8], [y0 + 0.5, 4.9], [y0 + 2.2, 3.4], [y0 + 2.5, 0.6], [y0 + 3.5, -4.5]];
     for (let t = strapT0; t >= -90; t -= 6) { const r = t * Math.PI / 180; half.push([A * Math.cos(r), cz + B * Math.sin(r)]); }
     const pts = half.map(([y, z]) => new THREE.Vector3(0, y, z));
@@ -740,7 +769,7 @@ const strapBy = {};
     const shape = new THREE.Shape(); shape.moveTo(-11, -0.8); shape.lineTo(11, -0.8); shape.lineTo(11, 0.8); shape.lineTo(-11, 0.8); shape.lineTo(-11, -0.8);
     const strap = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { steps: 260, bevelEnabled: false, extrudePath: curve }),
       new THREE.MeshStandardMaterial({ color: 0x2f3640, roughness: 0.9, side: THREE.DoubleSide }));
-    strap.castShadow = true; wristGrp.add(strap); strapBy[v] = strap;
+    strap.position.x = strapX; strap.castShadow = true; wristGrp.add(strap); strapBy[v] = strap;
   }
 })();
 
@@ -883,7 +912,7 @@ document.querySelectorAll("#views button").forEach(b => b.addEventListener("clic
 
 // picking
 const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const tip = $("tip");
-const pickBy = { devkit: [], xiao: [], pcb: [] }; parts.forEach(p => p.group.traverse(o => { if (o.isMesh) pickBy[p.v].push(o); }));
+const pickBy = { devkit: [], xiao: [], xled: [], pcb: [] }; parts.forEach(p => p.group.traverse(o => { if (o.isMesh) pickBy[p.v].push(o); }));
 let downAt = null;
 function pick(ev) {
   const r = renderer.domElement.getBoundingClientRect();
